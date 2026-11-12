@@ -21,7 +21,7 @@ test("due answer lists open items in range, sorted, with total", () => {
     { kind: "payment_link", recipient: null, amount: 19.9, currency: "EUR", statusText: "Open", due: "2026-11-12" },
   ];
   const q = parseDueQuery("Was wird diese Woche fällig?", { now });
-  assert.equal(dueSpeech(rows, q).speech, "Fällig: 2 Zahlungen. Zahlungslink 19,90 Euro am Donnerstag, 12.11., Max 120 Euro am Freitag, 13.11.. Zusammen 139,90 Euro.");
+  assert.equal(dueSpeech(rows, q).speech, "Fällig: 2 Zahlungen. Zahlungslink 19,90 Euro am Donnerstag, 12.11., Max 120 Euro am Freitag, 13.11. Zusammen 139,90 Euro.");
   const en = parseDueQuery("What is due next week", { now });
   assert.equal(dueSpeech(rows, en).speech, "Nothing is due in that period.");
   const od = parseDueQuery("What is overdue?", { now });

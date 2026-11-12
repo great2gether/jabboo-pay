@@ -29,6 +29,7 @@ Built for people with tremors, arthritis, RSI, paralysis or missing fingers, for
 | “Zeig mir alle offenen Rechnungen über 100 Euro aus diesem Monat” | AG Grid filters itself (status, type, amount, currency, dates, recipient); “3 offene Rechnungen, zusammen 420 Euro, älteste an Max vom 3.11.” | Invoicing v2 (list), Orders v2, Transaction Search |
 | “Nächste Zeile” / “next row”, “lies die Zeile vor” | Reads grid rows aloud, focus stays in the dictation field | – |
 | “Prüfe das Protokoll” / “Verify the audit log”, “Lies mir das Protokoll von heute vor” | Verifies the SHA-256 chain (“unchanged” / “changed from line 7”), reads today’s steps aloud | – |
+| “Was wird diese Woche fällig?” / “What is due next week?” / “Was ist überfällig?” | Open items due in that range, read aloud with weekday and total; shown in the Bryntum Calendar | Invoicing v2 (due dates) |
 | “ja” / “yes”, “abbrechen” / “cancel”, “wiederholen” / “repeat” | Confirm, cancel, hear the last message again | – |
 | 📷 Photo of a note, order or business card | Text recognised **on the Mac** (Apple Vision), then the same spoken preview and “yes” | Invoicing v2 / Orders v2 |
 | An AI agent (Claude Desktop, Claude Code) | MCP tools with human approval per call | all of the above |
@@ -38,6 +39,12 @@ German and English, number words (“fünfzig Euro”, “two thousand five hund
 ## AG Grid, voice-controlled
 
 All PayPal invoices, payment links and transactions in one [AG Grid Community](https://www.ag-grid.com/) table (MIT, loaded from jsDelivr), plus a second grid for the audit log. (PayPal notes that Transaction Search can take a while to list new Sandbox payments; invoices and links show up immediately.) A spoken search becomes a real AG Grid filter model (`setFilterModel`), the result is summarised aloud, and “next row” walks through it. Configured for screen readers: `ensureDomOrder`, no row/column virtualisation, no animation, text status, high-contrast Quartz theme, own `aria-live` region (AG Grid does not announce changes in the focused cell).
+
+## Due-date calendar (Bryntum Calendar)
+
+A “Due dates” tab shows the due dates of all open and paid invoices and payment links in [Bryntum Calendar](https://bryntum.com/products/calendar/) (month, week and agenda views, high-contrast theme). “Was wird diese Woche fällig?” answers aloud, writes the list as plain text for screen readers and moves the calendar to that week or month.
+
+**License note:** Bryntum Calendar is commercial software. Jabboo Pay does **not** include any Bryntum code: the page loads the public trial package `@bryntum/calendar-trial@7.3.8` from jsDelivr at runtime, for evaluation (it shows a trial watermark). Production use needs a [Bryntum license](https://bryntum.com/products/license/). Everything else in Jabboo Pay works without the calendar.
 
 ## Accountability: tamper-evident audit log
 
@@ -83,11 +90,12 @@ Target: WCAG 2.2 level AA.
 | `src/service.js`, `src/ledger.js` | Shared core for UI, CLI and MCP; local list of what you created (`data/`, git-ignored). |
 | `src/server.js`, `public/index.html` | Accessible web UI on `127.0.0.1:4242`. |
 | `src/grid.js` | Voice search → AG Grid filter model, spoken summaries, row reading. |
+| `src/calendar.js` | Due-date questions and spoken answers. |
 | `src/audit.js` | SHA-256 hash-chained audit log, verification, spoken summaries. |
 | `src/mcp.js` | MCP server with 6 tools (`.mcp.json` for Claude Code). |
 | `src/speak.js`, `bin/jabboo-pay.js` | CLI incl. hands-free `voice` mode with spoken output. |
 
-Zero npm dependencies (AG Grid comes from a CDN in the page). 45 tests: `npm test`.
+Zero npm dependencies (AG Grid and the Bryntum Calendar trial come from a CDN in the page). 47 tests: `npm test`.
 
 ## Setup (5 minutes)
 

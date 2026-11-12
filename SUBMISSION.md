@@ -4,7 +4,7 @@ Copy each block into the matching Devpost field. Everything is in English as req
 
 ## Form checklist (do not paste)
 
-- **Sponsor tools:** select **AG Grid** (required for the AG Grid sponsor prize). No other sponsor tool.
+- **Sponsor tools:** select **AG Grid** and **Bryntum** (both are used; a project can win only one sponsor prize – AG Grid is the main one).
 - **Built with:** paste the tag list below (contains `ag-grid`).
 - **Repository:** public GitHub repo, MIT license visible in “About”.
 - **Video:** public YouTube link, under 3:00.
@@ -22,7 +22,7 @@ A blind user runs PayPal by voice: speaks, hears every step, searches invoices i
 
 ## Built with (tags)
 
-javascript, node.js, paypal, paypal-invoicing-api, paypal-orders-api, paypal-transaction-search, paypal-sandbox, ag-grid, accessibility, wcag, voice, speech-recognition, text-to-speech, sha-256, mcp, model-context-protocol, claude, nvidia-parakeet, apple-vision, swift, macos
+javascript, node.js, paypal, paypal-invoicing-api, paypal-orders-api, paypal-transaction-search, paypal-sandbox, ag-grid, bryntum, bryntum-calendar, accessibility, wcag, voice, speech-recognition, text-to-speech, sha-256, mcp, model-context-protocol, claude, nvidia-parakeet, apple-vision, swift, macos
 
 ## Try it out (links)
 
@@ -42,21 +42,26 @@ I build Jabboo, a local dictation app for macOS. Using it every day, I learned t
 
 ### What it does
 
-**A blind user runs PayPal by voice – end to end.** Jabboo Pay combines things that are usually built separately: voice in, voice out, an accessible data grid, a tamper-evident audit chain and an AI agent with a human in the loop.
+**A blind user runs PayPal by voice – end to end.** Jabboo Pay combines things that are usually built separately: voice in, voice out, an accessible data grid, a due-date calendar, a tamper-evident audit chain and an AI agent with a human in the loop.
 
 1. **Speak.** “Schick Max eine PayPal-Rechnung über 50 Euro für das Shopware-Plugin.” German or English, spoken numbers, decimals, quantities (“3 hours at 80 dollars”), due dates, contacts with fuzzy matching.
 2. **Hear every step.** “Invoice to Max for 50 euros for Shopware plugin. Say yes to create it, or cancel.” Missing details are said out loud too. “Repeat” repeats it.
 3. **Confirm.** Only after “yes” Jabboo Pay creates and issues the invoice with the **PayPal Invoicing API v2**, or a pay-now link with the **Orders API v2**, and puts the payer link on the clipboard. Approved orders are captured automatically. Jabboo Pay can only request money, never send it.
 4. **Ask.** “Has Max paid?” – “Yes. Max paid 50 euros for the Shopware plugin.” “What is still open?” – every unpaid item with the total, with fresh status from PayPal.
 5. **Search by voice in an accessible AG Grid.** “Zeig mir alle offenen Rechnungen über 100 Euro aus diesem Monat.” The sentence becomes an AG Grid filter model across invoices, payment links and PayPal transactions (Transaction Search API), the grid filters itself, and Jabboo Pay says: “3 open invoices, 420 euros in total, oldest to Max from Nov 3.” “Next row” reads the next result aloud – the focus never leaves the dictation field.
-6. **Every step notarised.** What was heard, what was read back, whether the user confirmed by voice, key, button or MCP approval, which PayPal endpoint was called and what it answered: one line each in a local log, every line chained to the previous one with SHA-256. “Verify the audit log” answers “unchanged” – or “changed from line 7”. So when someone later says “I never said that”, there is proof. This is **accountability for assisted payments**.
-7. **Claude can do the same – a human always confirms.** A built-in MCP server gives Claude Desktop, Claude Code or any MCP client six tools: create invoice, create payment link, payment status, answer a payment question, parse a command, list contacts. The MCP client asks the human before every call, and the audit chain records it as “confirmed via MCP approval”.
+6. **Hear what is due.** “Was wird diese Woche fällig?” – “Due: 2 payments. Max 120 euros on Friday …”. The due dates also appear in a Bryntum Calendar (month, week, agenda), with a plain-text list for screen readers.
+7. **Every step notarised.** What was heard, what was read back, whether the user confirmed by voice, key, button or MCP approval, which PayPal endpoint was called and what it answered: one line each in a local log, every line chained to the previous one with SHA-256. “Verify the audit log” answers “unchanged” – or “changed from line 7”. So when someone later says “I never said that”, there is proof. This is **accountability for assisted payments**.
+8. **Claude can do the same – a human always confirms.** A built-in MCP server gives Claude Desktop, Claude Code or any MCP client six tools: create invoice, create payment link, payment status, answer a payment question, parse a command, list contacts. The MCP client asks the human before every call, and the audit chain records it as “confirmed via MCP approval”.
 
 The web UI targets **WCAG 2.2 AA**: keyboard only, ARIA live regions for every reply, visible focus, 44 px targets, contrast checked in light and dark mode, text up to 200 %, high-contrast mode, status as text and never colour alone. A hands-free terminal mode speaks with the offline macOS voices.
 
 ### Built with AG Grid
 
 AG Grid Community (MIT) is the “eyes” of Jabboo Pay. It shows every PayPal invoice, payment link and transaction in one grid with sorting and column filters – and Jabboo Pay drives it by voice: a spoken search becomes a real AG Grid filter model (`setFilterModel`) on status, type, amount, currency, date range and recipient, and the result is summarised out loud. A second AG Grid shows the audit chain. We configured it for screen readers following AG Grid’s accessibility guide: `ensureDomOrder`, no row or column virtualisation, no animation, text status instead of colour, a high-contrast Quartz theme, and our own live region because AG Grid (by design) doesn’t announce changes in the focused cell. AG Grid’s keyboard navigation works unchanged for users who prefer arrow keys.
+
+### Built with Bryntum Calendar
+
+The “Due dates” tab puts every invoice and payment link with a due date into Bryntum Calendar (high-contrast theme, month / week / agenda). A spoken question like “What is due next week?” is answered aloud and moves the calendar to that range. Licensing is kept clean: no Bryntum code is in the MIT repository; the page loads Bryntum’s public trial package from jsDelivr at runtime for evaluation, as noted in the README.
 
 ### How we built it
 
@@ -67,7 +72,7 @@ AG Grid Community (MIT) is the “eyes” of Jabboo Pay. It shows every PayPal i
 - **Voice out:** Web Speech API in the browser, `say` with offline macOS voices in the terminal.
 - **Agents:** MCP server (JSON-RPC 2.0 over stdio) with a `.mcp.json`, so Claude Code picks it up in the project folder.
 - **Extra:** a photo of a note or order is read on the Mac with Apple Vision and goes through the same spoken confirmation.
-- Zero npm dependencies (AG Grid is loaded from a CDN in the page), 45 unit tests, MIT licensed. Built with Claude Code.
+- Zero npm dependencies (AG Grid is loaded from a CDN in the page), 47 unit tests, MIT licensed. Built with Claude Code.
 
 ### Challenges we ran into
 
@@ -107,7 +112,7 @@ PayPal REST APIs in the Sandbox: OAuth2 (client credentials), Invoicing API v2 (
 On-device speech recognition (NVIDIA Parakeet TDT 0.6B v3 via Jabboo), text-to-speech (macOS voices, Web Speech API), natural-language parsers for payment commands, status questions and grid searches, an MCP server so AI agents (Claude Desktop / Claude Code) can create and check PayPal payments as tools with human approval, Apple Vision text recognition for photos, and Claude Code for building the project.
 
 **Which sponsor tools did you use?**
-AG Grid Community – voice-controlled, screen-reader-friendly grid of all PayPal invoices, payment links, transactions and the audit chain.
+AG Grid Community – voice-controlled, screen-reader-friendly grid of all PayPal invoices, payment links, transactions and the audit chain. Bryntum Calendar (public trial, loaded at runtime) – due-date calendar driven by spoken questions.
 
 **Is this a new project or an existing one?**
 New – the repository was created on 12 November 2026 for this hackathon. It can take input from Jabboo, my dictation app (closed source), but all PayPal, AG Grid, audit, accessibility and MCP code in this submission is new.

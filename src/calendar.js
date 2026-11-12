@@ -49,5 +49,5 @@ export function dueSpeech(rows, q, opts = {}) {
   const head = lang === "de"
     ? `${q.overdue ? "Überfällig" : "Fällig"}: ${n === 1 ? "eine Zahlung" : `${n} Zahlungen`}`
     : `${q.overdue ? "Overdue" : "Due"}: ${n === 1 ? "one payment" : `${n} payments`}`;
-  return { items, speech: `${head}. ${list}. ${lang === "de" ? "Zusammen" : "Total"} ${sum}.` };
+  return { items, speech: `${head}. ${list}${list.endsWith(".") ? "" : "."} ${lang === "de" ? "Zusammen" : "Total"} ${sum}.` };
 }

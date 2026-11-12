@@ -50,7 +50,8 @@ export function createApp(service, { port }) {
       if (req.method === "POST" && (url.pathname === "/api/interpret" || url.pathname === "/api/parse")) {
         const { text, source } = await readJson(req);
         const r = await service.interpret(String(text || "").slice(0, 2000), { source: source === "photo" ? "photo" : "voice or keyboard" });
-        if (r.type === "grid") r.rows = r.rows.map((x) => ({ ...x, sentence: { de: rowSentence(x, "de"), en: rowSentence(x, "en") } }));
+        if (r.type === "calendar") r.items = r.items.map((x) => ({ ...x, sentence: { de: rowSentence(x, "de"), en: rowSentence(x, "en") } }));
+        if (r.type === "grid" || r.type === "calendar") r.rows = r.rows.map((x) => ({ ...x, sentence: { de: rowSentence(x, "de"), en: rowSentence(x, "en") } }));
         return send(res, 200, r);
       }
       if (req.method === "GET" && url.pathname === "/api/grid") {

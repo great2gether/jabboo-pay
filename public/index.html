@@ -143,6 +143,7 @@
     <h2 id="grid-h">Payments and audit log <span class="hint" style="font-weight:400">(built with AG Grid)</span></h2>
     <div role="tablist" aria-label="Views" class="row" style="margin:0 0 1rem">
       <button type="button" role="tab" id="tab-payments" aria-controls="panel-payments" aria-selected="true" class="secondary">All PayPal payments</button>
+      <button type="button" role="tab" id="tab-calendar" aria-controls="panel-calendar" aria-selected="false" tabindex="-1" class="secondary">Due dates</button>
       <button type="button" role="tab" id="tab-audit" aria-controls="panel-audit" aria-selected="false" tabindex="-1" class="secondary">Audit log</button>
     </div>
     <div role="tabpanel" id="panel-payments" aria-labelledby="tab-payments">
@@ -155,6 +156,12 @@
     </div>
     <div id="grid" style="width:100%" aria-describedby="grid-help"></div>
     <ul class="hint" id="gridNotes"></ul>
+    </div>
+    <div role="tabpanel" id="panel-calendar" aria-labelledby="tab-calendar" hidden>
+      <p class="hint" id="cal-help">Due dates of open invoices and payment links (built with Bryntum Calendar, trial loaded from jsDelivr). Ask “Was wird diese Woche fällig?”, “What is due next week?” or “Was ist überfällig?”. The agenda view lists everything as text for screen readers; Bryntum’s own keyboard navigation works inside the calendar.</p>
+      <p class="say" id="calStatus" role="status" aria-live="polite" aria-atomic="true" style="font-size:1.05rem"></p>
+      <ul id="calList" aria-label="Due in the selected period"></ul>
+      <div id="calendar" style="height:560px;width:100%"></div>
     </div>
     <div role="tabpanel" id="panel-audit" aria-labelledby="tab-audit" hidden>
       <p class="hint" id="audit-help">Every step is recorded on this Mac: what was heard, what was read back, how it was confirmed (voice, key, button, MCP approval) and what PayPal answered. Each line carries the SHA-256 of the previous one, so any later change is detected. Say “Lies mir das Protokoll von heute vor” or “Prüfe das Protokoll”. Stored in <code>data/audit.jsonl</code>; turn off with <code>JABBOO_PAY_AUDIT=0</code>.</p>
@@ -268,6 +275,7 @@ async function submit(textArg) {
     }
     if (r.type === "answer") { $("preview").hidden = true; return say(r.speech, r.query.language); }
     if (r.type === "grid") return applyGridResult(r);
+    if (r.type === "calendar") return applyCalendarResult(r);
     if (r.type === "audit") { $("preview").hidden = true; say(r.speech, r.query.language); if (r.query.action === "read" || r.query.action === "verify") showTab("audit"); return; }
     if (r.type === "grid_nav") return moveGrid(r.move);
     pending = r.command.ok ? r.command : null;
@@ -447,24 +455,100 @@ function moveGrid(move) {
 
 // ---------- Tabs (arrow keys move between them) and the audit grid ----------
 let auditGrid = null;
-function showTab(name) {
-  for (const t of ["payments", "audit"]) {
+const TABS = ["payments", "calendar", "audit"];
+function showTab(name, { quiet = false } = {}) {
+  for (const t of TABS) {
     const on = t === name;
     $("tab-" + t).setAttribute("aria-selected", String(on));
     $("tab-" + t).tabIndex = on ? 0 : -1;
     $("panel-" + t).hidden = !on;
   }
   if (name === "audit") loadAudit();
+  if (name === "calendar" && !quiet) showCalendar();
 }
-for (const t of ["payments", "audit"]) {
+for (const t of TABS) {
   $("tab-" + t).onclick = () => showTab(t);
   $("tab-" + t).onkeydown = (e) => {
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-      const next = t === "payments" ? "audit" : "payments";
+      const i = TABS.indexOf(t);
+      const next = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
       showTab(next); $("tab-" + next).focus(); e.preventDefault();
     }
   };
 }
+// ---------- Bryntum Calendar: due dates (loaded on first use) ----------
+let calendar = null;
+let bryntumLoading = null;
+const BRYNTUM = "https://cdn.jsdelivr.net/npm/@bryntum/calendar-trial@7.3.8/";
+function loadBryntum() {
+  if (bryntumLoading) return bryntumLoading;
+  bryntumLoading = new Promise((resolve, reject) => {
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    for (const href of ["fontawesome/css/fontawesome.css", "fontawesome/css/solid.css", "calendar.css", dark ? "high-contrast-dark.css" : "high-contrast-light.css"]) {
+      const l = document.createElement("link"); l.rel = "stylesheet"; l.href = BRYNTUM + href; document.head.append(l);
+    }
+    const sc = document.createElement("script");
+    sc.src = BRYNTUM + "calendar.umd.js";
+    sc.onload = () => resolve(window.bryntum?.calendar);
+    sc.onerror = () => reject(new Error("Bryntum Calendar could not be loaded (internet needed)."));
+    document.head.append(sc);
+  });
+  return bryntumLoading;
+}
+function dueEvents(rows) {
+  return rows.filter((r) => r.due && r.kind !== "transaction").map((r) => ({
+    id: r.id,
+    name: `${r.statusText === "Paid" ? "✓ Paid" : "○ Open"} · ${r.recipient ? r.recipient.split(" ")[0] : "Link"} · ${Number(r.amount).toFixed(2)} ${r.currency}`,
+    startDate: r.due, endDate: r.due, allDay: true,
+    eventColor: r.statusText === "Paid" ? "green" : "orange",
+  }));
+}
+function renderDueList(items, lang) {
+  $("calList").replaceChildren(...items.map((r) => {
+    const li = document.createElement("li");
+    li.textContent = `${r.due}: ${r.sentence?.[lang === "de" ? "de" : "en"] || r.recipient || r.id}`;
+    return li;
+  }));
+}
+async function showCalendar(range) {
+  try {
+    const rows = calRows || (await api("/api/grid")).rows;
+    calRows = rows;
+    const lib = await loadBryntum();
+    const events = dueEvents(rows);
+    if (!calendar) {
+      calendar = new lib.Calendar({
+        appendTo: "calendar",
+        date: new Date(),
+        mode: "month",
+        modes: { day: null, week: true, month: true, year: null, agenda: true },
+        events,
+        readOnly: true,
+        sidebar: false,
+      });
+    } else {
+      calendar.events = events;
+      if (range) calendar.date = new Date(range.from);
+    }
+    if (range) {
+      const days = (new Date(range.to) - new Date(range.from)) / 86_400_000;
+      const today = new Date().toISOString().slice(0, 10);
+      calendar.mode = days > 8 ? "month" : "week";
+      calendar.date = new Date(today >= range.from && today <= range.to ? today : range.from);
+    }
+    if (!range) $("calStatus").textContent = `${events.length} due dates in the calendar.`;
+  } catch (e) { $("calStatus").textContent = e.message + " The spoken answers still work."; }
+}
+let calRows = null;
+async function applyCalendarResult(r) {
+  calRows = r.rows;
+  say(r.speech, r.query.language);
+  showTab("calendar", { quiet: true });
+  $("calStatus").textContent = r.speech;
+  renderDueList(r.items, r.query.language);
+  showCalendar(r.query);
+}
+
 const EVENT_TEXT = { heard: "Heard", asked: "Read back", confirmed: "Confirmed", cancelled: "Cancelled", paypal: "PayPal" };
 function auditDetail(e) {
   if (e.event === "heard") return `${e.text || e.summary || ""} (${e.source || "?"})`;

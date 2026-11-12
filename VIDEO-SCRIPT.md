@@ -33,7 +33,11 @@ Say: „Nächste Zeile, Jabboo.“ → row is read aloud. Say „Nächste Zeile�
 Say: „Hat Max bezahlt, Jabboo?“ / „Was ist noch offen, Jabboo?“
 > “Fresh status straight from PayPal, as an answer, not a dashboard.”
 
-**1:50–2:15 · Proof: the audit chain** (open the “Audit log” tab)
+**1:45–1:55 · Due dates** (optional, if time allows)
+Say: „Was wird diesen Monat fällig, Jabboo?“ → answer plays, the “Due dates” tab opens the Bryntum Calendar.
+> “And I hear what is due – the calendar follows my question.”
+
+**1:55–2:15 · Proof: the audit chain** (open the “Audit log” tab)
 Say: „Prüfe das Protokoll, Jabboo.“ → „Das Protokoll ist unverändert …“
 > “Every step is notarised: what I said, what was read back, how I confirmed, what PayPal answered – each line chained with SHA-256. If anyone ever says ‘I never said that’, this proves it. Accountability for assisted payments.”
 
