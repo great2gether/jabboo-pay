@@ -35,6 +35,8 @@
   .lead { color: var(--muted); margin: .75rem 0 1.5rem; font-size: 1.05rem; }
   .card { background: var(--card); border: 2px solid var(--line); border-radius: 1rem; padding: 1.25rem; margin-bottom: 1rem; }
   label { font-weight: 700; display: block; margin-bottom: .5rem; }
+  label.button { display: inline-flex; border: 2px solid var(--line); border-radius: .75rem; padding: .6rem 1.1rem; min-height: 2.9rem; cursor: pointer; }
+  #photo:focus-visible + *, label.button:has(+ #photo:focus-visible) { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 6px var(--focus-ring); }
   textarea { width: 100%; min-height: 6.5rem; resize: vertical; border: 2px solid var(--line); border-radius: .8rem; padding: .9rem; font: inherit; font-size: 1.25rem; background: var(--card); color: var(--ink); }
   .hint { color: var(--muted); font-size: .95rem; margin: .6rem 0 0; }
   kbd { font: inherit; font-weight: 700; border: 1px solid var(--line); border-radius: .3rem; padding: 0 .3rem; }
@@ -91,6 +93,11 @@
     <textarea id="cmd" aria-describedby="cmd-help" autocomplete="off" spellcheck="false"
       placeholder="Send Max an invoice for 50 euros for the Shopware plugin"></textarea>
     <p class="hint" id="cmd-help">Dictate with Jabboo and end with “Jabboo” – that presses <kbd>Enter</kbd>. Then say “yes” / “ja” to create it, “cancel” / “abbrechen”, or “repeat” / “wiederholen”. Ask “Has Max paid?” or “What is still open?”. Keyboard: <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> new line, <kbd>Esc</kbd> cancels.</p>
+    <div class="row">
+      <label class="button secondary" for="photo" style="margin:0;font-weight:700">📷 Photo to invoice</label>
+      <input type="file" id="photo" accept="image/*" class="sr-only" aria-describedby="photo-help">
+    </div>
+    <p class="hint" id="photo-help">Take or choose a photo of a note, order or business card. Text is recognised on this Mac (Apple Vision), then read back to you for a “yes”.</p>
     <div class="examples" role="group" aria-label="Examples, press to try">
       <button type="button" data-example>Schick Max eine PayPal-Rechnung über 50 Euro für das Shopware-Plugin</button>
       <button type="button" data-example>Send John an invoice for 3 hours at 80 dollars for consulting, due in 14 days</button>
@@ -321,6 +328,22 @@ $("repeat").onclick = () => say(last.text, last.lang);
 $("copy").onclick = async () => {
   try { await navigator.clipboard.writeText($("link").textContent); say("Link copied."); } catch { showError("Could not copy. Select the link and copy it manually."); }
 };
+$("photo").addEventListener("change", async () => {
+  const f = $("photo").files[0];
+  $("photo").value = "";
+  if (!f) return;
+  showError("");
+  say("Reading the photo …");
+  try {
+    const res = await fetch("/api/photo", { method: "POST", headers: { "Content-Type": f.type || "image/jpeg" }, body: f });
+    const r = await res.json();
+    if (!res.ok) throw new Error(r.error || "Could not read the photo");
+    pending = r.command.ok ? r.command : null;
+    renderPreview(r.command);
+    say(r.speech, r.command.language);
+  } catch (e) { showError(e.message); }
+  $("cmd").focus();
+});
 document.querySelectorAll("[data-example]").forEach((b) => (b.onclick = () => submit(b.textContent)));
 api("/api/health").then((h) => {
   if (!h.configured) $("health").textContent = " Warning: PayPal credentials missing – add them to .env and restart.";

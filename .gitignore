@@ -4,3 +4,4 @@ contacts.json
 *.log
 .DS_Store
 data/
+.cache/

@@ -4,6 +4,8 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, createService, commandFromFields, log } from "./service.js";
+import { commandFromText, recognizeText } from "./document.js";
+import { confirmationPrompt } from "./query.js";
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
@@ -48,6 +50,21 @@ export function createApp(service, { port }) {
       }
       if (req.method === "GET" && url.pathname === "/api/ledger") {
         return send(res, 200, service.ledger.list().slice(0, 50).map(({ id, kind, status, paid, link, name, amount, currency, description, language }) => ({ id, kind, status, paid, link, name, amount, currency, description, language })));
+      }
+      // Photo -> on-device text recognition -> the same preview and spoken confirmation.
+      if (req.method === "POST" && url.pathname === "/api/photo") {
+        if (!/^image\//.test(req.headers["content-type"] || "")) return send(res, 415, { error: "Please send an image." });
+        const chunks = [];
+        let size = 0;
+        for await (const c of req) {
+          size += c.length;
+          if (size > 15 * 1024 * 1024) return send(res, 413, { error: "Image too large (max 15 MB)." });
+          chunks.push(c);
+        }
+        const text = await recognizeText(Buffer.concat(chunks));
+        const command = commandFromText(text, service.contacts, { defaultCurrency: process.env.DEFAULT_CURRENCY || "EUR" });
+        log("photo", { code: command.ok ? "ok" : "incomplete" });
+        return send(res, 200, { type: "command", command, speech: confirmationPrompt(command) });
       }
       if (req.method === "POST" && url.pathname === "/api/create") {
         const { command: c = {} } = await readJson(req);
