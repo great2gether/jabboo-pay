@@ -4,8 +4,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseCommand, describe, SUPPORTED_CURRENCIES } from "./parser.js";
+import { parseCommand, parseControl, describe, SUPPORTED_CURRENCIES } from "./parser.js";
 import { createPayPalClient } from "./paypal.js";
+import { parseQuery, answerQuery, confirmationPrompt } from "./query.js";
+import { createLedger } from "./ledger.js";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -61,15 +63,33 @@ export function commandFromFields(f, { defaultCurrency = "EUR" } = {}) {
   };
 }
 
-export function createService({ env = process.env, root = ROOT, client = null, contacts = null } = {}) {
+export function createService({ env = process.env, root = ROOT, client = null, contacts = null, ledger = null } = {}) {
   const defaultCurrency = env.DEFAULT_CURRENCY || "EUR";
   const book = contacts || loadContacts(root, env);
+  const store = ledger || createLedger(env.JABBOO_PAY_LEDGER || join(root, "data", "ledger.json"));
   let paypal = client;
   const getClient = () =>
     (paypal ||= createPayPalClient({ clientId: env.PAYPAL_CLIENT_ID, clientSecret: env.PAYPAL_CLIENT_SECRET }));
 
-  return {
+  async function refresh(rows) {
+    const api = getClient();
+    return Promise.all(
+      rows.map(async (r) => {
+        if (r.paid) return r;
+        try {
+          const s = r.kind === "invoice" ? await api.getInvoice(r.id) : await api.getOrder(r.id);
+          store.update(r.id, { status: s.status, paid: s.paid });
+          return { ...r, status: s.status, paid: s.paid };
+        } catch {
+          return r;
+        }
+      }),
+    );
+  }
+
+  const service = {
     contacts: book,
+    ledger: store,
     configured: () => Boolean(client || (env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET)),
 
     parse(text) {
@@ -89,14 +109,48 @@ export function createService({ env = process.env, root = ROOT, client = null, c
           ? await api.createInvoice(cmd, { invoicerName: env.INVOICER_NAME })
           : await api.createOrder(cmd, { returnUrl, cancelUrl });
       log("created", result);
+      store.add({
+        id: result.id,
+        kind: result.kind,
+        status: result.status,
+        paid: false,
+        link: result.link,
+        name: cmd.recipient?.name || null,
+        amount: cmd.amount,
+        currency: cmd.currency,
+        description: cmd.description,
+        language: cmd.language,
+      });
       return { ...result, summary: describe(cmd) };
     },
 
     async status(kind, id) {
       const api = getClient();
       const s = kind === "invoice" ? await api.getInvoice(id) : await api.getOrder(id);
+      store.update(s.id || id, { status: s.status, paid: s.paid });
       log("status", s);
       return s;
     },
+
+    // Answer "has Max paid?" / "what is still open?" with fresh PayPal status.
+    async answer(query) {
+      const rows = store.list();
+      const relevant = query.type === "open" ? rows.filter((r) => !r.paid).slice(0, 20) : rows.slice(0, 20);
+      const fresh = await refresh(relevant);
+      const byId = new Map(fresh.map((r) => [r.id, r]));
+      const all = rows.map((r) => byId.get(r.id) || r);
+      return { type: "answer", query, speech: answerQuery(query, all) };
+    },
+
+    // One entry point for whatever was said: a reply, a question or a new command.
+    async interpret(text) {
+      const control = parseControl(text || "");
+      if (control) return { type: "control", control };
+      const query = parseQuery(text || "", book);
+      if (query) return service.answer(query);
+      const cmd = service.parse(String(text || ""));
+      return { type: "command", command: cmd, speech: confirmationPrompt(cmd) };
+    },
   };
+  return service;
 }
