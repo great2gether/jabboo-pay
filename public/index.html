@@ -633,6 +633,9 @@ $("photo").addEventListener("change", async () => {
   $("cmd").focus();
 });
 document.querySelectorAll("[data-example]").forEach((b) => (b.onclick = () => submit(b.textContent)));
+// Demo mode for the video: /?demo=1
+window.__jabbooDemoPhoto = (r) => { pending = r.command.ok ? r.command : null; pendingFlow = r.flowId || null; renderPreview(r.command); say(r.speech, r.command.language); };
+if (new URLSearchParams(location.search).has("demo")) { speechOn = true; applySettings(); const sc = document.createElement("script"); sc.src = "/demo.js"; document.body.append(sc); }
 api("/api/health").then((h) => {
   if (!h.configured) $("health").textContent = " Warning: PayPal credentials missing – add them to .env and restart.";
 }).catch(() => {});

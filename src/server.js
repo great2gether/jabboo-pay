@@ -7,6 +7,7 @@ import { ROOT, createService, commandFromFields, log } from "./service.js";
 import { commandFromText, recognizeText } from "./document.js";
 import { confirmationPrompt } from "./query.js";
 import { rowSentence } from "./grid.js";
+import { createMcpHandler } from "./mcp.js";
 import { describe } from "./parser.js";
 import { randomUUID } from "node:crypto";
 
@@ -38,6 +39,19 @@ export function createApp(service, { port }) {
       }
       if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
         return send(res, 200, page(), "text/html; charset=utf-8");
+      }
+      if (req.method === "GET" && url.pathname === "/demo.js") {
+        return send(res, 200, readFileSync(join(ROOT, "public", "demo.js"), "utf8"), "text/javascript; charset=utf-8");
+      }
+      if (req.method === "GET" && url.pathname === "/demo-note.jpg") {
+        res.writeHead(200, { "Content-Type": "image/jpeg" });
+        return res.end(readFileSync(join(ROOT, "public", "demo-note.jpg")));
+      }
+      // Demo: a real tools/call through the same MCP handler Claude uses.
+      if (req.method === "POST" && url.pathname === "/api/demo/mcp") {
+        const handle = createMcpHandler(service);
+        const request = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "create_paypal_payment_link", arguments: { amount: 30, currency: "EUR", description: "Accessibility workshop" } } };
+        return send(res, 200, { request, response: await handle(request) });
       }
       if (req.method === "GET" && url.pathname === "/return") {
         return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Jabboo Pay</title><body style="font:18px system-ui;padding:40px;text-align:center"><h1>Payment approved ✓</h1><p>You can close this tab. Jabboo Pay captures the payment now.</p></body>`, "text/html; charset=utf-8");

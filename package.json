@@ -11,7 +11,8 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "start": "node bin/jabboo-pay.js serve",
-    "mcp": "node bin/jabboo-pay.js mcp"
+    "mcp": "node bin/jabboo-pay.js mcp",
+    "demo": "sh bin/demo.sh"
   },
   "engines": {
     "node": ">=20.12"
