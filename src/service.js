@@ -10,6 +10,7 @@ import { parseQuery, answerQuery, confirmationPrompt } from "./query.js";
 import { createLedger } from "./ledger.js";
 import { randomUUID } from "node:crypto";
 import { createAudit, parseAuditQuery, auditSpeech, verifySpeech } from "./audit.js";
+import { parseDueQuery, dueSpeech } from "./calendar.js";
 import { parseGridQuery, parseGridNav, toFilterModel, applyFilters, summarize } from "./grid.js";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -130,7 +131,9 @@ export function createService({ env = process.env, root = ROOT, client = null, c
       }
       trail.append("paypal", { flow, endpoint, result: "ok", kind: result.kind, id: result.id, status: result.status });
       log("created", result);
+      const dueDate = cmd.dueInDays ? new Date(Date.now() + cmd.dueInDays * 86_400_000).toISOString().slice(0, 10) : null;
       store.add({
+        dueDate,
         id: result.id,
         kind: result.kind,
         status: result.status,
@@ -181,6 +184,7 @@ export function createService({ env = process.env, root = ROOT, client = null, c
         statusText: r.paid ? "Paid" : ["CANCELLED", "VOIDED"].includes(r.status) ? "Cancelled" : "Open",
         paid: !!r.paid,
         date: r.createdAt,
+        due: r.dueDate || (r.createdAt || "").slice(0, 10) || null,
         link: r.link,
       }));
       const byId = new Map(ledgerRows.map((r) => [r.id, r]));
@@ -190,7 +194,12 @@ export function createService({ env = process.env, root = ROOT, client = null, c
       ];
       for (const [name, load, feature] of sources) {
         try {
-          for (const r of await load()) if (r.id && !byId.has(r.id)) byId.set(r.id, r);
+          for (const r of await load()) {
+            if (!r.id) continue;
+            const mine = byId.get(r.id);
+            if (!mine) byId.set(r.id, r);
+            else if (r.due) mine.due = r.due; // PayPal knows the real due date
+          }
         } catch (err) {
           notes.push(err.status === 403 || err.paypalName === "NOT_AUTHORIZED" || /NOT_AUTHORIZED|PERMISSION/.test(err.message)
             ? `PayPal ${name} not available: enable “${feature}” in the Sandbox app’s features.`
@@ -222,6 +231,12 @@ export function createService({ env = process.env, root = ROOT, client = null, c
           ? verifySpeech(trail.verify(), aq.language)
           : auditSpeech(trail.entries(), { today: aq.today, language: aq.language });
         return { type: "audit", query: aq, speech, verify: trail.verify() };
+      }
+      const dq = parseDueQuery(text || "");
+      if (dq) {
+        const { rows } = await service.gridRows({ maxAgeMs: 5000 });
+        const { speech, items } = dueSpeech(rows, dq);
+        return { type: "calendar", query: dq, speech, items, rows };
       }
       const nav = parseGridNav(text || "");
       if (nav) return { type: "grid_nav", move: nav };

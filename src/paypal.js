@@ -249,6 +249,7 @@ export function createPayPalClient({ clientId, clientSecret, fetchImpl = globalT
         statusText: INVOICE_STATUS[inv.status] || (inv.status === "DRAFT" ? "Draft" : "Open"),
         paid: inv.status === "PAID" || inv.status === "MARKED_AS_PAID",
         date: inv.detail?.invoice_date ? `${inv.detail.invoice_date}T00:00:00Z` : inv.detail?.metadata?.create_time,
+        due: inv.detail?.payment_term?.due_date || inv.detail?.invoice_date || null,
         link: inv.detail?.metadata?.recipient_view_url || null,
       };
     });

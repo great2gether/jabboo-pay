@@ -19,7 +19,7 @@ const MONTHS = {
 const day = (d) => d.toISOString().slice(0, 10);
 const startOfDay = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
-function dateRange(text, now) {
+export function dateRange(text, now) {
   const today = startOfDay(now);
   const t = text.toLowerCase();
   const addDays = (d, n) => new Date(d.getTime() + n * 86_400_000);
@@ -29,6 +29,12 @@ function dateRange(text, now) {
     const dow = (today.getUTCDay() + 6) % 7; // Monday = 0
     return [addDays(today, -dow), addDays(today, 6 - dow)];
   }
+  if (/\b(nächste[nmr]?\s+woche|kommende[nmr]?\s+woche|next week)\b/.test(t)) {
+    const dow = (today.getUTCDay() + 6) % 7;
+    return [addDays(today, 7 - dow), addDays(today, 13 - dow)];
+  }
+  if (/\b(morgen|tomorrow)\b/.test(t)) return [addDays(today, 1), addDays(today, 1)];
+  if (/\b(nächste[nmr]?\s+monat|next month)\b/.test(t)) return [new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1)), new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 2, 0))];
   if (/\b(letzte[nmr]?\s+woche|last week)\b/.test(t)) {
     const dow = (today.getUTCDay() + 6) % 7;
     return [addDays(today, -dow - 7), addDays(today, -dow - 1)];
