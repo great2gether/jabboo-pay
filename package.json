@@ -1,0 +1,20 @@
+{
+  "name": "jabboo-pay",
+  "version": "0.1.0",
+  "description": "Voice-first PayPal invoices and payment links: say it, Jabboo Pay creates it in the PayPal Sandbox. CLI, local web UI and MCP server.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Atilla Boz",
+  "bin": {
+    "jabboo-pay": "bin/jabboo-pay.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "node bin/jabboo-pay.js serve",
+    "mcp": "node bin/jabboo-pay.js mcp"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "keywords": ["paypal", "invoicing", "voice", "dictation", "mcp", "agentic-commerce", "sandbox"]
+}

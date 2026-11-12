@@ -1,0 +1,5 @@
+{
+  "Max": { "name": "Max Mustermann", "email": "max@example.com" },
+  "Anna": { "name": "Anna Schmidt", "email": "anna@example.com" },
+  "John": { "name": "John Miller", "email": "john@example.com" }
+}

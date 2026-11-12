@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jabboo Pay</title>
+<style>
+  :root {
+    --bg: #f6f4fb; --card: #ffffff; --ink: #1d1530; --muted: #6b6480; --line: #e4def0;
+    --brand: #6d3df5; --brand-ink: #ffffff; --ok: #14804a; --ok-bg: #e5f6ec; --warn: #9a5b00; --warn-bg: #fff2dc;
+    --pp: #003087;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #120d1d; --card: #1c1529; --ink: #f1edf9; --muted: #a59cba; --line: #2f2642;
+      --brand: #8f6bff; --ok: #5fd394; --ok-bg: #12301f; --warn: #ffc266; --warn-bg: #33250d; --pp: #8fb3ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .logo { width: 40px; height: 40px; border-radius: 12px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 800; font-size: 22px; }
+  h1 { font-size: 28px; margin: 0; letter-spacing: -0.02em; }
+  .tag { margin-left: auto; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; background: var(--warn-bg); color: var(--warn); }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px; margin-bottom: 16px; }
+  label { font-size: 13px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 8px; }
+  textarea { width: 100%; min-height: 96px; resize: vertical; border: 2px solid var(--line); border-radius: 14px; padding: 14px; font: inherit; font-size: 19px; background: transparent; color: var(--ink); }
+  textarea:focus { outline: none; border-color: var(--brand); }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .chip:hover { border-color: var(--brand); }
+  .summary { font-size: 20px; font-weight: 650; margin: 0 0 14px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0 0 18px; }
+  dt { color: var(--muted); font-size: 14px; }
+  dd { margin: 0; font-weight: 550; overflow-wrap: anywhere; }
+  .missing { color: var(--warn); background: var(--warn-bg); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  button.primary, button.secondary, a.button { font: inherit; font-weight: 650; border-radius: 12px; padding: 12px 18px; cursor: pointer; text-decoration: none; display: inline-block; }
+  button.primary { background: var(--brand); color: var(--brand-ink); border: 0; }
+  button.primary:disabled { opacity: .45; cursor: not-allowed; }
+  button.secondary, a.button { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .link { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--bg); border-radius: 10px; padding: 10px 12px; margin: 10px 0 14px; overflow-wrap: anywhere; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: var(--warn-bg); color: var(--warn); }
+  .pill.paid { background: var(--ok-bg); color: var(--ok); }
+  .history { list-style: none; padding: 0; margin: 0; }
+  .history li { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .history li:first-child { border-top: 0; }
+  .history .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
+  footer strong { color: var(--ink); }
+  .pp { color: var(--pp); font-weight: 800; }
+  [hidden] { display: none !important; }
+  .error { color: #c0392b; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">J</div>
+    <h1>Jabboo Pay</h1>
+    <span class="tag">PayPal Sandbox</span>
+  </header>
+  <p class="lead">Say who, how much and what for. Jabboo Pay turns it into a <span class="pp">PayPal</span> invoice or payment link.</p>
+
+  <section class="card">
+    <label for="cmd">Your command</label>
+    <textarea id="cmd" autofocus placeholder="Send Max an invoice for 50 euros for the Shopware plugin"></textarea>
+    <div class="hint">Dictate with Jabboo and finish with <b>“Jabboo”</b> (presses Enter). Then say <b>“confirm”</b> / <b>“bestätigen”</b> or <b>“cancel”</b>. Enter submits, Shift+Enter makes a new line.</div>
+    <div class="examples" id="examples"></div>
+    <div class="error" id="error" hidden></div>
+  </section>
+
+  <section class="card" id="preview" hidden>
+    <p class="summary" id="summary"></p>
+    <dl id="fields"></dl>
+    <div class="missing" id="missing" hidden></div>
+    <div class="row">
+      <button class="primary" id="confirm">Create in PayPal Sandbox</button>
+      <button class="secondary" id="cancel">Cancel</button>
+    </div>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <p class="summary" id="resultTitle"></p>
+    <div><span class="pill" id="status">SENT</span> <span class="hint" id="resultId"></span></div>
+    <div class="link" id="link"></div>
+    <div class="row">
+      <button class="primary" id="copy">Copy link</button>
+      <a class="button" id="open" target="_blank" rel="noopener">Open PayPal page</a>
+    </div>
+  </section>
+
+  <section class="card" id="historyCard" hidden>
+    <label>This session</label>
+    <ul class="history" id="history"></ul>
+  </section>
+
+  <footer>
+    <strong>Privacy:</strong> speech is recognised on your Mac by Jabboo (NVIDIA Parakeet, offline). Only the structured request – recipient, amount, purpose – goes to the PayPal Sandbox. No audio, no transcripts in logs.
+    <span id="health"></span>
+  </footer>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const EXAMPLES = [
+  "Schick Max eine PayPal-Rechnung über 50 Euro für das Shopware-Plugin",
+  "Send John an invoice for 3 hours at 80 dollars for consulting, due in 14 days",
+  "Erstelle einen Zahlungslink über 19,90 Euro für das E-Book",
+];
+let pending = null;
+const items = [];
+
+function speak(text, lang) {
+  try {
+    if (!("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang === "de" ? "de-DE" : "en-US";
+    speechSynthesis.speak(u);
+  } catch {}
+}
+
+function showError(msg) {
+  $("error").textContent = msg || "";
+  $("error").hidden = !msg;
+}
+
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Request failed");
+  return json;
+}
+
+const LABELS = {
+  kind: "Type", recipient: "Recipient", email: "E-mail", amount: "Amount", description: "Purpose", due: "Due",
+};
+function renderPreview(cmd) {
+  pending = cmd;
+  $("summary").textContent = cmd.summary;
+  const rows = [
+    ["kind", cmd.kind === "invoice" ? "Invoice (Invoicing API v2)" : "Payment link (Orders API v2)"],
+    ["recipient", cmd.recipient?.name || "—"],
+    ["email", cmd.recipient?.email || "—"],
+    ["amount", cmd.amount ? `${cmd.amount} ${cmd.currency}${cmd.quantity > 1 ? ` (${cmd.quantity} × ${cmd.unitAmount})` : ""}` : "—"],
+    ["description", cmd.description + (cmd.descriptionDefaulted ? " (default)" : "")],
+    ["due", cmd.dueInDays ? `in ${cmd.dueInDays} days` : "on receipt"],
+  ];
+  $("fields").replaceChildren(...rows.flatMap(([k, v]) => {
+    const dt = document.createElement("dt"); dt.textContent = LABELS[k];
+    const dd = document.createElement("dd"); dd.textContent = v;
+    return [dt, dd];
+  }));
+  const miss = cmd.missing || [];
+  $("missing").hidden = miss.length === 0;
+  $("missing").textContent = miss.length ? `Missing: ${miss.join(", ").replace("recipient_email", "recipient e-mail (add the name to contacts.json or say the address)")}` : "";
+  $("confirm").disabled = miss.length > 0;
+  $("preview").hidden = false;
+  $("result").hidden = true;
+  const de = cmd.language === "de";
+  speak(miss.length ? (de ? "Da fehlt noch etwas." : "Something is missing.") : cmd.summary + (de ? ". Bestätigen?" : ". Confirm?"), cmd.language);
+}
+
+async function submit() {
+  const text = $("cmd").value.trim();
+  $("cmd").value = "";
+  showError("");
+  if (!text) return;
+  try {
+    const r = await api("/api/parse", { text });
+    if (r.control === "confirm") return pending && pending.ok ? confirmPending() : showError("Nothing to confirm yet.");
+    if (r.control === "cancel") return cancelPending();
+    renderPreview(r);
+  } catch (e) { showError(e.message); }
+}
+
+async function confirmPending() {
+  if (!pending?.ok) return;
+  const cmd = pending;
+  $("confirm").disabled = true;
+  $("confirm").textContent = "Creating…";
+  try {
+    const r = await api("/api/create", { command: cmd });
+    pending = null;
+    $("preview").hidden = true;
+    $("result").hidden = false;
+    $("resultTitle").textContent = `${cmd.kind === "invoice" ? "Invoice" : "Payment link"} created – ${cmd.amount} ${cmd.currency}`;
+    $("resultId").textContent = r.id;
+    $("link").textContent = r.link || "(no link returned)";
+    $("open").href = r.link || "#";
+    setStatus(r.status, false);
+    let copied = false;
+    try { await navigator.clipboard.writeText(r.link); copied = true; } catch {}
+    const de = cmd.language === "de";
+    speak(de ? `Erledigt. ${copied ? "Der Link ist in der Zwischenablage." : ""}` : `Done. ${copied ? "The link is on your clipboard." : ""}`, cmd.language);
+    const item = { ...r, cmd, paid: false };
+    items.unshift(item);
+    renderHistory();
+    poll(item);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    $("confirm").textContent = "Create in PayPal Sandbox";
+    $("confirm").disabled = false;
+    $("cmd").focus();
+  }
+}
+
+function cancelPending() {
+  pending = null;
+  $("preview").hidden = true;
+  speak("Okay.", "en");
+}
+
+function setStatus(status, paid) {
+  $("status").textContent = paid ? "PAID ✓" : status;
+  $("status").classList.toggle("paid", !!paid);
+}
+
+function renderHistory() {
+  $("historyCard").hidden = items.length === 0;
+  $("history").replaceChildren(...items.map((it) => {
+    const li = document.createElement("li");
+    const pill = document.createElement("span");
+    pill.className = "pill" + (it.paid ? " paid" : "");
+    pill.textContent = it.paid ? "PAID" : it.status;
+    const what = document.createElement("span");
+    what.className = "what";
+    what.textContent = it.summary;
+    const a = document.createElement("a");
+    a.href = it.link; a.target = "_blank"; a.rel = "noopener"; a.textContent = "open";
+    li.append(pill, what, a);
+    return li;
+  }));
+}
+
+async function poll(item) {
+  for (let i = 0; i < 400 && !item.paid; i++) {
+    await new Promise((r) => setTimeout(r, 4000));
+    try {
+      const s = await api(`/api/status?kind=${item.kind}&id=${encodeURIComponent(item.id)}`);
+      item.status = s.status;
+      if (s.paid) {
+        item.paid = true;
+        const de = item.cmd.language === "de";
+        const who = item.cmd.recipient?.name?.split(" ")[0];
+        speak(de ? `${who || "Jemand"} hat ${item.cmd.amount.replace(/\.00$/, "")} ${item.cmd.currency === "EUR" ? "Euro" : item.cmd.currency} bezahlt.` : `${who || "Someone"} just paid ${item.cmd.amount.replace(/\.00$/, "")} ${item.cmd.currency}.`, item.cmd.language);
+      }
+      if ($("resultId").textContent === item.id) setStatus(item.status, item.paid);
+      renderHistory();
+    } catch {}
+  }
+}
+
+$("cmd").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+$("confirm").addEventListener("click", confirmPending);
+$("cancel").addEventListener("click", cancelPending);
+$("copy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("link").textContent); $("copy").textContent = "Copied ✓"; setTimeout(() => ($("copy").textContent = "Copy link"), 1500); } catch {} });
+for (const ex of EXAMPLES) {
+  const b = document.createElement("button");
+  b.className = "chip"; b.textContent = ex;
+  b.addEventListener("click", () => { $("cmd").value = ex; submit(); });
+  $("examples").append(b);
+}
+api("/api/health").then((h) => {
+  if (!h.configured) $("health").textContent = " · ⚠️ PayPal credentials missing: add them to .env and restart.";
+}).catch(() => {});
+</script>
+</body>
+</html>
