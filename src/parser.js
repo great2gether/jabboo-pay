@@ -291,6 +291,7 @@ export function parseCommand(input, contacts = {}, options = {}) {
 export function parseControl(input) {
   const t = stripWakeAndSend(input).toLowerCase().replace(/[^\p{L}\s]/gu, " ").replace(/\s+/g, " ").trim();
   if (/^(?:ja|ja bitte|jawohl|bestätigen|bestätige|bestätigt|okay|ok|passt|mach los|los|go|yes|yes please|confirm|confirmed|do it|send|senden|erstellen|create)$/.test(t)) return "confirm";
+  if (/^(?:wiederholen|wiederhole|nochmal|noch mal|wie bitte|repeat|say again|again|pardon)$/.test(t)) return "repeat";
   if (/^(?:nein|abbrechen|abbruch|stopp|stop|cancel|no|verwerfen|discard|lass es)$/.test(t)) return "cancel";
   return null;
 }

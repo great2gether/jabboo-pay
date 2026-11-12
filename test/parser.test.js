@@ -154,6 +154,7 @@ test("controls", () => {
   assert.equal(parseControl("Ja"), "confirm");
   assert.equal(parseControl("confirm"), "confirm");
   assert.equal(parseControl("Abbrechen."), "cancel");
+  assert.equal(parseControl("Wiederholen."), "repeat");
   assert.equal(parseControl("Schick Max 5 Euro"), null);
 });
 

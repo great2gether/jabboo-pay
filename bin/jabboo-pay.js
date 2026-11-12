@@ -30,7 +30,9 @@ async function main() {
   }
   const service = createService();
   const speaker = createSpeaker({ enabled: !flags.has("--quiet") && process.env.JABBOO_PAY_SPEAK !== "0" && process.platform === "darwin" });
+  let last = null;
   const say = async (text, lang) => {
+    last = { text, lang };
     console.log(text);
     await speaker.say(text, lang);
   };
@@ -55,7 +57,9 @@ async function main() {
       }
       try {
         const r = await service.interpret(text);
-        if (r.type === "control") {
+        if (r.type === "control" && r.control === "repeat") {
+          if (last) await say(last.text, last.lang);
+        } else if (r.type === "control") {
           if (!pending) await say("Es gibt gerade nichts zu bestätigen.", "de");
           else if (r.control === "cancel") {
             await say(pending.language === "de" ? "Abgebrochen. Nichts wurde erstellt." : "Cancelled. Nothing was created.", pending.language);

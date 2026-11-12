@@ -3,8 +3,7 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ROOT, createService, log } from "./service.js";
-import { parseControl } from "./parser.js";
+import { ROOT, createService, commandFromFields, log } from "./service.js";
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
@@ -41,14 +40,30 @@ export function createApp(service, { port }) {
       if (req.method === "GET" && url.pathname === "/api/health") {
         return send(res, 200, { ok: true, configured: service.configured(), contacts: Object.keys(service.contacts) });
       }
-      if (req.method === "POST" && url.pathname === "/api/parse") {
+      // Whatever was said: a new command (with a spoken confirmation prompt),
+      // a reply ("ja", "cancel") or a question ("Hat Max bezahlt?").
+      if (req.method === "POST" && (url.pathname === "/api/interpret" || url.pathname === "/api/parse")) {
         const { text } = await readJson(req);
-        const control = parseControl(text || "");
-        if (control) return send(res, 200, { control });
-        return send(res, 200, service.parse(String(text || "")));
+        return send(res, 200, await service.interpret(String(text || "").slice(0, 2000)));
+      }
+      if (req.method === "GET" && url.pathname === "/api/ledger") {
+        return send(res, 200, service.ledger.list().slice(0, 50).map(({ id, kind, status, paid, link, name, amount, currency, description, language }) => ({ id, kind, status, paid, link, name, amount, currency, description, language })));
       }
       if (req.method === "POST" && url.pathname === "/api/create") {
-        const { command } = await readJson(req);
+        const { command: c = {} } = await readJson(req);
+        // Re-validate: the browser only sends back what the parser produced.
+        const command = commandFromFields({
+          kind: c.kind,
+          recipient_name: c.recipient?.name,
+          recipient_email: c.recipient?.email,
+          unit_amount: c.unitAmount,
+          quantity: c.quantity,
+          unit: c.unit,
+          currency: c.currency,
+          description: c.description,
+          due_in_days: c.dueInDays,
+          language: c.language,
+        });
         const result = await service.create(command, { returnUrl: `${origin}/return`, cancelUrl: `${origin}/` });
         return send(res, 200, result);
       }
