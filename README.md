@@ -122,6 +122,10 @@ Requirements: macOS (for speech output and photo recognition; the rest runs anyw
    ```
 4. **Talk to it:** dictate into the field (Jabboo, macOS Dictation, or type), Enter. Listen, say “yes”. Open the link, pay with the sandbox personal account – Jabboo Pay says “Max just paid”.
 
+### Self-playing demo
+
+`npm run demo` opens `http://localhost:4242/?demo=1` and plays the whole tour by itself (narration, captions, typed commands, real Sandbox calls, MCP call with the human-confirmation step). Click “▶ Start demo”. Close any dictation app that listens to the microphone first.
+
 ### Hands-free terminal
 
 ```bash
