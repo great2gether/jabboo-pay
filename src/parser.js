@@ -157,7 +157,7 @@ const VERB_NAME = new RegExp(
   "u",
 );
 const PREP_NAME = new RegExp(
-  String.raw`(?<![\p{L}])(?:an|to|from|von|für|for)\s+(\p{Lu}[\p{L}'-]+)(?=\s+(?:eine|einen|ein|an|a|über|for|für|in|mit|with|\d|[€$£])|[,.!?]|$)`,
+  String.raw`(?<![\p{L}])(?:an|to|from|von)\s+(\p{Lu}[\p{L}'-]+)(?=\s+(?:eine|einen|ein|an|a|über|for|für|in|mit|with|\d|[€$£])|[,.!?]|$)`,
   "u",
 );
 

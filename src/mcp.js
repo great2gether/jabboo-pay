@@ -89,9 +89,9 @@ export function createMcpHandler(service) {
       case "parse_payment_command":
         return text(service.parse(String(args.text || "")));
       case "create_paypal_invoice":
-        return text(await service.create(commandFromFields({ ...args, kind: "invoice" })));
+        return text(await service.create(commandFromFields({ ...args, kind: "invoice" }), { confirmedBy: "mcp", source: "mcp" }));
       case "create_paypal_payment_link":
-        return text(await service.create(commandFromFields({ ...args, kind: "payment_link" })));
+        return text(await service.create(commandFromFields({ ...args, kind: "payment_link" }), { confirmedBy: "mcp", source: "mcp" }));
       case "get_payment_status":
         return text(await service.status(args.kind, String(args.id || "")));
       case "ask_payment_question": {

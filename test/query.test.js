@@ -4,6 +4,7 @@ import { parseQuery, answerQuery, spokenMoney, confirmationPrompt } from "../src
 import { parseCommand } from "../src/parser.js";
 import { createService } from "../src/service.js";
 import { createLedger } from "../src/ledger.js";
+import { createAudit } from "../src/audit.js";
 import { createPayPalClient } from "../src/paypal.js";
 
 const contacts = {
@@ -70,7 +71,7 @@ test("interpret: command -> confirm -> ledger -> status question, all with fresh
     return json(404, {});
   };
   const client = createPayPalClient({ clientId: "a", clientSecret: "b", fetchImpl });
-  const service = createService({ env: {}, client, contacts, ledger: createLedger(null) });
+  const service = createService({ env: {}, client, contacts, ledger: createLedger(null), audit: createAudit(null) });
   const step1 = await service.interpret("Schick Max eine Rechnung über 50 Euro für das Shopware-Plugin, Jabboo.");
   assert.equal(step1.type, "command");
   assert.match(step1.speech, /Bestätigen|„ja“/);

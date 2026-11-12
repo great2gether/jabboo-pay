@@ -46,6 +46,7 @@
   button, a.button { min-height: 2.9rem; min-width: 2.9rem; font: inherit; font-weight: 700; border-radius: .75rem; padding: .6rem 1.1rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
   .primary { background: var(--brand); color: var(--brand-ink); border: 2px solid var(--brand); }
   .secondary, a.button { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+  [role="tab"][aria-selected="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
   button[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
   button:disabled { opacity: .55; cursor: not-allowed; }
   .examples { display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem; }
@@ -139,7 +140,12 @@
   </section>
 
   <section class="card" aria-labelledby="grid-h">
-    <h2 id="grid-h">All PayPal payments <span class="hint" style="font-weight:400">(built with AG Grid)</span></h2>
+    <h2 id="grid-h">Payments and audit log <span class="hint" style="font-weight:400">(built with AG Grid)</span></h2>
+    <div role="tablist" aria-label="Views" class="row" style="margin:0 0 1rem">
+      <button type="button" role="tab" id="tab-payments" aria-controls="panel-payments" aria-selected="true" class="secondary">All PayPal payments</button>
+      <button type="button" role="tab" id="tab-audit" aria-controls="panel-audit" aria-selected="false" tabindex="-1" class="secondary">Audit log</button>
+    </div>
+    <div role="tabpanel" id="panel-payments" aria-labelledby="tab-payments">
     <p class="hint" id="grid-help">Search by voice: “Zeig mir alle offenen Rechnungen über 100 Euro aus diesem Monat”, “Show paid invoices to Max”, “Zeig alles”. Move through results with “nächste Zeile” / “next row”, “vorherige Zeile”, “lies die Zeile vor”. With the keyboard: Tab into the table, arrow keys, Enter on a column header sorts.</p>
     <p class="say" id="gridStatus" role="status" aria-live="polite" aria-atomic="true" style="font-size:1.05rem">Loading payments …</p>
     <div class="row" style="margin:0 0 .75rem">
@@ -149,6 +155,16 @@
     </div>
     <div id="grid" style="width:100%" aria-describedby="grid-help"></div>
     <ul class="hint" id="gridNotes"></ul>
+    </div>
+    <div role="tabpanel" id="panel-audit" aria-labelledby="tab-audit" hidden>
+      <p class="hint" id="audit-help">Every step is recorded on this Mac: what was heard, what was read back, how it was confirmed (voice, key, button, MCP approval) and what PayPal answered. Each line carries the SHA-256 of the previous one, so any later change is detected. Say “Lies mir das Protokoll von heute vor” or “Prüfe das Protokoll”. Stored in <code>data/audit.jsonl</code>; turn off with <code>JABBOO_PAY_AUDIT=0</code>.</p>
+      <p class="say" id="auditStatus" role="status" aria-live="polite" aria-atomic="true" style="font-size:1.05rem"></p>
+      <div class="row" style="margin:0 0 .75rem">
+        <button type="button" class="secondary" id="auditVerify">Verify chain</button>
+        <button type="button" class="secondary" id="auditRead">Read today’s log aloud</button>
+      </div>
+      <div id="auditGrid" style="width:100%" aria-describedby="audit-help"></div>
+    </div>
   </section>
 </main>
 
@@ -164,6 +180,7 @@ const store = {
   set(k, v) { try { localStorage.setItem("jp." + k, JSON.stringify(v)); } catch {} },
 };
 let pending = null;
+let pendingFlow = null;
 let last = { text: "Ready. Say a command.", lang: "en" };
 let scale = store.get("scale", 1);
 let speechOn = store.get("speech", true);
@@ -246,27 +263,31 @@ async function submit(textArg) {
     const r = await api("/api/interpret", { text });
     if (r.type === "control") {
       if (r.control === "repeat") return say(last.text, last.lang);
-      if (r.control === "cancel") return cancelPending();
-      if (r.control === "confirm") return pending ? confirmPending() : say("There is nothing to confirm yet. Say a command first.");
+      if (r.control === "cancel") return cancelPending("voice");
+      if (r.control === "confirm") return pending ? confirmPending("voice") : say("There is nothing to confirm yet. Say a command first.");
     }
     if (r.type === "answer") { $("preview").hidden = true; return say(r.speech, r.query.language); }
     if (r.type === "grid") return applyGridResult(r);
+    if (r.type === "audit") { $("preview").hidden = true; say(r.speech, r.query.language); if (r.query.action === "read" || r.query.action === "verify") showTab("audit"); return; }
     if (r.type === "grid_nav") return moveGrid(r.move);
     pending = r.command.ok ? r.command : null;
+    pendingFlow = r.flowId || null;
     renderPreview(r.command);
     say(r.speech, r.command.language);
   } catch (e) { showError(e.message); }
 }
 
-async function confirmPending() {
+async function confirmPending(by = "button") {
   if (!pending) return;
   const cmd = pending;
+  const flowId = pendingFlow;
   pending = null;
+  pendingFlow = null;
   $("confirm").disabled = true;
   const de = cmd.language === "de";
   say(de ? "Einen Moment, ich erstelle es bei PayPal." : "One moment, creating it at PayPal.", cmd.language);
   try {
-    const r = await api("/api/create", { command: cmd });
+    const r = await api("/api/create", { command: cmd, flowId, confirmedBy: by });
     $("preview").hidden = true;
     $("result").hidden = false;
     $("resultText").textContent = r.summary;
@@ -284,6 +305,7 @@ async function confirmPending() {
     poll(item);
   } catch (e) {
     pending = cmd;
+    pendingFlow = flowId;
     $("confirm").disabled = false;
     showError(e.message, cmd.language);
   } finally {
@@ -291,9 +313,11 @@ async function confirmPending() {
   }
 }
 
-function cancelPending() {
+function cancelPending(by = "button") {
   const lang = pending?.language || "en";
+  if (pendingFlow) api("/api/cancel", { flowId: pendingFlow, by }).catch(() => {});
   pending = null;
+  pendingFlow = null;
   $("preview").hidden = true;
   say(lang === "de" ? "Abgebrochen. Nichts wurde erstellt." : "Cancelled. Nothing was created.", lang);
   $("cmd").focus();
@@ -421,6 +445,59 @@ function moveGrid(move) {
   // Focus stays in the command field so dictation can go on.
 }
 
+// ---------- Tabs (arrow keys move between them) and the audit grid ----------
+let auditGrid = null;
+function showTab(name) {
+  for (const t of ["payments", "audit"]) {
+    const on = t === name;
+    $("tab-" + t).setAttribute("aria-selected", String(on));
+    $("tab-" + t).tabIndex = on ? 0 : -1;
+    $("panel-" + t).hidden = !on;
+  }
+  if (name === "audit") loadAudit();
+}
+for (const t of ["payments", "audit"]) {
+  $("tab-" + t).onclick = () => showTab(t);
+  $("tab-" + t).onkeydown = (e) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      const next = t === "payments" ? "audit" : "payments";
+      showTab(next); $("tab-" + next).focus(); e.preventDefault();
+    }
+  };
+}
+const EVENT_TEXT = { heard: "Heard", asked: "Read back", confirmed: "Confirmed", cancelled: "Cancelled", paypal: "PayPal" };
+function auditDetail(e) {
+  if (e.event === "heard") return `${e.text || e.summary || ""} (${e.source || "?"})`;
+  if (e.event === "asked") return e.speech;
+  if (e.event === "confirmed" || e.event === "cancelled") return `by ${e.by}${e.summary ? ": " + e.summary : ""}`;
+  if (e.event === "paypal") return `${e.endpoint} → ${e.result}${e.id ? " " + e.id : ""}${e.status ? " " + e.status : ""}${e.debugId ? " debug " + e.debugId : ""}`;
+  return "";
+}
+async function loadAudit() {
+  try {
+    const { entries, verify, enabled } = await api("/api/audit");
+    const rows = entries.map((e) => ({ seq: e.seq, time: new Date(e.time), event: EVENT_TEXT[e.event] || e.event, detail: auditDetail(e), hash: e.hash.slice(0, 12) + "…" })).reverse();
+    if (window.agGrid && !auditGrid) {
+      auditGrid = agGrid.createGrid($("auditGrid"), {
+        theme: grid ? grid.getGridOption("theme") : undefined,
+        domLayout: "autoHeight", ensureDomOrder: true, suppressRowVirtualisation: true, suppressColumnVirtualisation: true, animateRows: false,
+        defaultColDef: { sortable: true, filter: true, resizable: true, flex: 1 },
+        columnDefs: [
+          { field: "seq", headerName: "#", maxWidth: 80, filter: "agNumberColumnFilter" },
+          { field: "time", headerName: "Time", minWidth: 120, valueFormatter: (p) => p.value.toLocaleTimeString(), filter: "agDateColumnFilter" },
+          { field: "event", headerName: "Step", maxWidth: 140 },
+          { field: "detail", headerName: "Details", flex: 3, wrapText: true, autoHeight: true },
+          { field: "hash", headerName: "Hash", maxWidth: 160 },
+        ],
+      });
+    }
+    if (auditGrid) auditGrid.setGridOption("rowData", rows);
+    $("auditStatus").textContent = !enabled ? "Audit log is turned off." : verify.count === 0 ? "No entries yet." : verify.ok ? `Chain verified: ${verify.count} entries, unchanged.` : `Warning: changed from line ${verify.brokenAt}.`;
+  } catch (e) { $("auditStatus").textContent = "Could not load the audit log: " + e.message; }
+}
+$("auditVerify").onclick = () => submit("Prüfe das Protokoll");
+$("auditRead").onclick = () => submit("Lies mir das Protokoll von heute vor");
+
 $("gridRefresh").onclick = loadGrid;
 $("gridClear").onclick = () => { if (grid) { grid.setFilterModel(null); gridStatus(`Filters cleared. ${grid.getDisplayedRowCount()} payments shown.`); } };
 $("gridRead").onclick = () => { readOnFocus = !readOnFocus; $("gridRead").setAttribute("aria-pressed", String(readOnFocus)); };
@@ -447,10 +524,10 @@ async function poll(item) {
 
 $("cmd").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
-  if (e.key === "Escape") { e.preventDefault(); cancelPending(); }
+  if (e.key === "Escape") { e.preventDefault(); cancelPending("keyboard"); }
 });
-$("confirm").onclick = confirmPending;
-$("cancel").onclick = cancelPending;
+$("confirm").onclick = (e) => confirmPending(e.detail === 0 ? "keyboard" : "button");
+$("cancel").onclick = (e) => cancelPending(e.detail === 0 ? "keyboard" : "button");
 $("repeat").onclick = () => say(last.text, last.lang);
 $("copy").onclick = async () => {
   try { await navigator.clipboard.writeText($("link").textContent); say("Link copied."); } catch { showError("Could not copy. Select the link and copy it manually."); }

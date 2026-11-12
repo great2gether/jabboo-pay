@@ -8,6 +8,8 @@ import { parseCommand, parseControl, describe, SUPPORTED_CURRENCIES } from "./pa
 import { createPayPalClient } from "./paypal.js";
 import { parseQuery, answerQuery, confirmationPrompt } from "./query.js";
 import { createLedger } from "./ledger.js";
+import { randomUUID } from "node:crypto";
+import { createAudit, parseAuditQuery, auditSpeech, verifySpeech } from "./audit.js";
 import { parseGridQuery, parseGridNav, toFilterModel, applyFilters, summarize } from "./grid.js";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -64,10 +66,11 @@ export function commandFromFields(f, { defaultCurrency = "EUR" } = {}) {
   };
 }
 
-export function createService({ env = process.env, root = ROOT, client = null, contacts = null, ledger = null } = {}) {
+export function createService({ env = process.env, root = ROOT, client = null, contacts = null, ledger = null, audit = null } = {}) {
   const defaultCurrency = env.DEFAULT_CURRENCY || "EUR";
   const book = contacts || loadContacts(root, env);
   const store = ledger || createLedger(env.JABBOO_PAY_LEDGER || join(root, "data", "ledger.json"));
+  const trail = audit || createAudit(env.JABBOO_PAY_AUDIT_FILE || join(root, "data", "audit.jsonl"), { enabled: env.JABBOO_PAY_AUDIT !== "0" });
   let paypal = client;
   const getClient = () =>
     (paypal ||= createPayPalClient({ clientId: env.PAYPAL_CLIENT_ID, clientSecret: env.PAYPAL_CLIENT_SECRET }));
@@ -92,6 +95,11 @@ export function createService({ env = process.env, root = ROOT, client = null, c
   const service = {
     contacts: book,
     ledger: store,
+    audit: trail,
+
+    cancel(flowId, by = "voice") {
+      if (flowId) trail.append("cancelled", { flow: flowId, by });
+    },
     configured: () => Boolean(client || (env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET)),
 
     parse(text) {
@@ -99,17 +107,28 @@ export function createService({ env = process.env, root = ROOT, client = null, c
       return { ...cmd, summary: describe(cmd) };
     },
 
-    async create(cmd, { returnUrl, cancelUrl } = {}) {
+    async create(cmd, { returnUrl, cancelUrl, flowId, confirmedBy = "voice", source } = {}) {
       if (!cmd?.ok) {
         const e = new Error(`Command incomplete: missing ${(cmd?.missing || ["everything"]).join(", ")}`);
         e.code = "incomplete";
         throw e;
       }
+      const flow = flowId || randomUUID();
+      if (!flowId) trail.append("heard", { flow, source: source || confirmedBy, text: null, summary: describe(cmd) });
+      trail.append("confirmed", { flow, by: confirmedBy, summary: describe(cmd) });
       const api = getClient();
-      const result =
-        cmd.kind === "invoice"
-          ? await api.createInvoice(cmd, { invoicerName: env.INVOICER_NAME })
-          : await api.createOrder(cmd, { returnUrl, cancelUrl });
+      const endpoint = cmd.kind === "invoice" ? "POST /v2/invoicing/invoices + /send" : "POST /v2/checkout/orders";
+      let result;
+      try {
+        result =
+          cmd.kind === "invoice"
+            ? await api.createInvoice(cmd, { invoicerName: env.INVOICER_NAME })
+            : await api.createOrder(cmd, { returnUrl, cancelUrl });
+      } catch (err) {
+        trail.append("paypal", { flow, endpoint, result: "error", code: err.paypalName || err.code || err.status || "error", debugId: err.debugId });
+        throw err;
+      }
+      trail.append("paypal", { flow, endpoint, result: "ok", kind: result.kind, id: result.id, status: result.status });
       log("created", result);
       store.add({
         id: result.id,
@@ -194,9 +213,16 @@ export function createService({ env = process.env, root = ROOT, client = null, c
     },
 
     // One entry point for whatever was said: a reply, a question or a new command.
-    async interpret(text) {
+    async interpret(text, { source = "keyboard" } = {}) {
       const control = parseControl(text || "");
       if (control) return { type: "control", control };
+      const aq = parseAuditQuery(text || "");
+      if (aq) {
+        const speech = aq.action === "verify"
+          ? verifySpeech(trail.verify(), aq.language)
+          : auditSpeech(trail.entries(), { today: aq.today, language: aq.language });
+        return { type: "audit", query: aq, speech, verify: trail.verify() };
+      }
       const nav = parseGridNav(text || "");
       if (nav) return { type: "grid_nav", move: nav };
       const gq = parseGridQuery(text || "", book);
@@ -204,7 +230,11 @@ export function createService({ env = process.env, root = ROOT, client = null, c
       const query = parseQuery(text || "", book);
       if (query) return service.answer(query);
       const cmd = service.parse(String(text || ""));
-      return { type: "command", command: cmd, speech: confirmationPrompt(cmd) };
+      const speech = confirmationPrompt(cmd);
+      const flowId = randomUUID();
+      trail.append("heard", { flow: flowId, source, text: String(text || "").slice(0, 500), summary: cmd.ok ? describe(cmd) : null });
+      trail.append("asked", { flow: flowId, speech, complete: cmd.ok });
+      return { type: "command", command: cmd, speech, flowId };
     },
   };
   return service;

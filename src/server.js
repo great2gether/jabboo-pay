@@ -7,6 +7,8 @@ import { ROOT, createService, commandFromFields, log } from "./service.js";
 import { commandFromText, recognizeText } from "./document.js";
 import { confirmationPrompt } from "./query.js";
 import { rowSentence } from "./grid.js";
+import { describe } from "./parser.js";
+import { randomUUID } from "node:crypto";
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
@@ -46,14 +48,22 @@ export function createApp(service, { port }) {
       // Whatever was said: a new command (with a spoken confirmation prompt),
       // a reply ("ja", "cancel") or a question ("Hat Max bezahlt?").
       if (req.method === "POST" && (url.pathname === "/api/interpret" || url.pathname === "/api/parse")) {
-        const { text } = await readJson(req);
-        const r = await service.interpret(String(text || "").slice(0, 2000));
+        const { text, source } = await readJson(req);
+        const r = await service.interpret(String(text || "").slice(0, 2000), { source: source === "photo" ? "photo" : "voice or keyboard" });
         if (r.type === "grid") r.rows = r.rows.map((x) => ({ ...x, sentence: { de: rowSentence(x, "de"), en: rowSentence(x, "en") } }));
         return send(res, 200, r);
       }
       if (req.method === "GET" && url.pathname === "/api/grid") {
         const { rows, notes } = await service.gridRows();
         return send(res, 200, { rows: rows.map((r) => ({ ...r, sentence: { de: rowSentence(r, "de"), en: rowSentence(r, "en") } })), notes });
+      }
+      if (req.method === "POST" && url.pathname === "/api/cancel") {
+        const { flowId, by } = await readJson(req);
+        service.cancel(typeof flowId === "string" ? flowId.slice(0, 64) : null, ["voice", "button", "keyboard"].includes(by) ? by : "voice");
+        return send(res, 200, { ok: true });
+      }
+      if (req.method === "GET" && url.pathname === "/api/audit") {
+        return send(res, 200, { entries: service.audit.entries().slice(-500), verify: service.audit.verify(), enabled: service.audit.enabled, file: "data/audit.jsonl" });
       }
       if (req.method === "GET" && url.pathname === "/api/ledger") {
         return send(res, 200, service.ledger.list().slice(0, 50).map(({ id, kind, status, paid, link, name, amount, currency, description, language }) => ({ id, kind, status, paid, link, name, amount, currency, description, language })));
@@ -71,10 +81,14 @@ export function createApp(service, { port }) {
         const text = await recognizeText(Buffer.concat(chunks));
         const command = commandFromText(text, service.contacts, { defaultCurrency: process.env.DEFAULT_CURRENCY || "EUR" });
         log("photo", { code: command.ok ? "ok" : "incomplete" });
-        return send(res, 200, { type: "command", command, speech: confirmationPrompt(command) });
+        const speech = confirmationPrompt(command);
+        const flowId = randomUUID();
+        service.audit.append("heard", { flow: flowId, source: "photo", text: "(photo, text recognised on this Mac)", summary: command.ok ? describe(command) : null });
+        service.audit.append("asked", { flow: flowId, speech, complete: command.ok });
+        return send(res, 200, { type: "command", command, speech, flowId });
       }
       if (req.method === "POST" && url.pathname === "/api/create") {
-        const { command: c = {} } = await readJson(req);
+        const { command: c = {}, flowId, confirmedBy } = await readJson(req);
         // Re-validate: the browser only sends back what the parser produced.
         const command = commandFromFields({
           kind: c.kind,
@@ -88,7 +102,8 @@ export function createApp(service, { port }) {
           due_in_days: c.dueInDays,
           language: c.language,
         });
-        const result = await service.create(command, { returnUrl: `${origin}/return`, cancelUrl: `${origin}/` });
+        const by = ["voice", "button", "keyboard"].includes(confirmedBy) ? confirmedBy : "voice";
+        const result = await service.create(command, { flowId: typeof flowId === "string" ? flowId.slice(0, 64) : undefined, confirmedBy: by, returnUrl: `${origin}/return`, cancelUrl: `${origin}/` });
         return send(res, 200, result);
       }
       if (req.method === "GET" && url.pathname === "/api/status") {

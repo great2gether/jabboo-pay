@@ -5,6 +5,7 @@ import { createService, commandFromFields } from "../src/service.js";
 import { createMcpHandler, TOOLS } from "../src/mcp.js";
 import { parseCommand } from "../src/parser.js";
 import { createLedger } from "../src/ledger.js";
+import { createAudit } from "../src/audit.js";
 
 // Fake PayPal Sandbox: records calls, answers like the real API.
 function fakePayPal({ failInvoice = false } = {}) {
@@ -87,7 +88,7 @@ test("PayPal errors carry the debug id but no request data", async () => {
 test("service refuses incomplete commands and logs ids only", async () => {
   const fake = fakePayPal();
   const client = createPayPalClient({ clientId: "id", clientSecret: "secret", fetchImpl: fake.fetchImpl });
-  const service = createService({ env: {}, client, contacts, ledger: createLedger(null) });
+  const service = createService({ env: {}, client, contacts, ledger: createLedger(null), audit: createAudit(null) });
   await assert.rejects(service.create(service.parse("Schick Lisa eine Rechnung über 5 Euro")), /recipient_email/);
   const writes = [];
   const orig = process.stderr.write.bind(process.stderr);
@@ -113,7 +114,7 @@ test("structured input validation (MCP / agents)", () => {
 test("MCP: initialize, tools/list, tools/call", async () => {
   const fake = fakePayPal();
   const client = createPayPalClient({ clientId: "id", clientSecret: "secret", fetchImpl: fake.fetchImpl });
-  const handle = createMcpHandler(createService({ env: {}, client, contacts, ledger: createLedger(null) }));
+  const handle = createMcpHandler(createService({ env: {}, client, contacts, ledger: createLedger(null), audit: createAudit(null) }));
   const init = await handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
   assert.equal(init.result.serverInfo.name, "jabboo-pay");
   assert.equal(await handle({ jsonrpc: "2.0", method: "notifications/initialized" }), null);

@@ -6,6 +6,7 @@
 // jabboo-pay mcp                   MCP server on stdio (Claude Desktop, Claude Code)
 // jabboo-pay voice                 hands-free terminal: dictate, hear the answer, say "ja"/"yes"
 // jabboo-pay ask "<question>"      "Hat Max bezahlt?", "What is still open?"
+// jabboo-pay audit [today|verify]  read or verify the tamper-evident audit log
 
 import { createInterface } from "node:readline/promises";
 import { execFileSync } from "node:child_process";
@@ -47,6 +48,7 @@ async function main() {
     // One line per dictated sentence (Jabboo presses Enter when you say "Jabboo").
     const rl = createInterface({ input: process.stdin, terminal: false });
     let pending = null;
+    let pendingFlow = null;
     await say("Jabboo Pay hört zu. Sag zum Beispiel: Schick Max eine Rechnung über 50 Euro für das Plugin.", "de");
     process.stdout.write("> ");
     for await (const line of rl) {
@@ -56,18 +58,19 @@ async function main() {
         continue;
       }
       try {
-        const r = await service.interpret(text);
+        const r = await service.interpret(text, { source: "cli" });
         if (r.type === "control" && r.control === "repeat") {
           if (last) await say(last.text, last.lang);
         } else if (r.type === "control") {
           if (!pending) await say("Es gibt gerade nichts zu bestätigen.", "de");
           else if (r.control === "cancel") {
             await say(pending.language === "de" ? "Abgebrochen. Nichts wurde erstellt." : "Cancelled. Nothing was created.", pending.language);
+            service.cancel(pendingFlow, "voice");
             pending = null;
           } else {
             const cmd = pending;
             pending = null;
-            const res = await service.create(cmd);
+            const res = await service.create(cmd, { flowId: pendingFlow, confirmedBy: "voice" });
             let copied = false;
             try {
               execFileSync("pbcopy", { input: res.link });
@@ -82,10 +85,13 @@ async function main() {
               cmd.language,
             );
           }
-        } else if (r.type === "answer") {
+        } else if (r.type === "answer" || r.type === "audit" || r.type === "grid") {
           await say(r.speech, r.query.language);
+        } else if (r.type === "grid_nav") {
+          await say("Zeilen lesen geht in der Web-Ansicht. Frag hier zum Beispiel: Zeig mir alle offenen Rechnungen.", "de");
         } else {
           pending = r.command.ok ? r.command : null;
+          pendingFlow = r.flowId;
           await say(r.speech, r.command.language);
         }
       } catch (err) {
@@ -93,6 +99,18 @@ async function main() {
       }
       process.stdout.write("> ");
     }
+    return;
+  }
+
+  if (cmd === "audit") {
+    const { verifySpeech, auditSpeech } = await import("../src/audit.js");
+    if (args[0] === "verify") {
+      const v = service.audit.verify();
+      await say(verifySpeech(v, "en"), "en");
+      process.exitCode = v.ok ? 0 : 3;
+      return;
+    }
+    await say(auditSpeech(service.audit.entries(), { today: args[0] === "today", language: "en" }), "en");
     return;
   }
 
@@ -114,7 +132,7 @@ async function main() {
       rl.close();
       if (!["y", "yes", "j", "ja"].includes(answer)) return console.log("Cancelled.");
     }
-    const r = await service.create(parsed);
+    const r = await service.create(parsed, { confirmedBy: flags.has("--yes") ? "cli" : "keyboard", source: "cli" });
     console.log(`${r.kind} ${r.id} ${r.status}`);
     console.log(r.link);
     return;
@@ -131,7 +149,8 @@ async function main() {
   jabboo-pay serve      # web UI on http://localhost:4242
   jabboo-pay mcp        # MCP server (stdio)
   jabboo-pay voice      # hands-free: dictate, listen, say "ja" / "yes" (--quiet: no speech)
-  jabboo-pay ask "Hat Max bezahlt?"`);
+  jabboo-pay ask "Hat Max bezahlt?"
+  jabboo-pay audit [today|verify]   # tamper-evident log of every step`);
 }
 
 main().catch((err) => {
