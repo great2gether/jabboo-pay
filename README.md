@@ -1,53 +1,79 @@
 # Jabboo Pay
 
-**Say it. Get paid.** Jabboo Pay turns a spoken sentence into a real PayPal invoice or payment link – in the PayPal Sandbox, in about a second.
+**PayPal for everyone who can’t easily type or see.**
 
-> “Schick Max eine PayPal-Rechnung über 50 Euro für das Shopware-Plugin.”
-> → PayPal invoice for Max Mustermann, 50.00 EUR, item “Shopware-Plugin”, payer link on your clipboard, read back to you, and a spoken “Max just paid 50 euros” when the money arrives.
+Jabboo Pay lets you create PayPal invoices and payment links by voice – and hear everything back. Say who, how much and what for. Jabboo Pay reads it back, waits for your “yes”, creates it in PayPal and tells you when it’s paid. No mouse, no small form fields, no reading required.
 
-Jabboo Pay is the payments companion of [Jabboo](https://jabboo.app), a local, privacy-first dictation app for macOS (speech recognition runs offline with NVIDIA Parakeet). Jabboo types what you say into any app and presses Enter when you say “Jabboo”. Jabboo Pay listens to that text – or to any other dictation tool, keyboard or AI agent – and talks to PayPal.
+> 🗣 “Schick Max eine PayPal-Rechnung über 50 Euro für das Shopware-Plugin.”
+> 🔊 “Rechnung an Max über 50 Euro für Shopware-Plugin. Sag ‚ja‘ zum Erstellen oder ‚abbrechen‘.”
+> 🗣 “Ja.”
+> 🔊 “Erledigt. Die Rechnung ist erstellt, der Link ist in der Zwischenablage.”
+> … later …
+> 🗣 “Hat Max bezahlt?” 🔊 “Ja. Max hat 50 Euro für Shopware-Plugin bezahlt.”
 
-- **Voice → PayPal Invoicing API v2**: create and issue an invoice, get the payer link (no PayPal e-mail is sent; you share the link where you already talk to your client).
-- **Voice → PayPal Orders API v2**: a pay-now link for anyone; approved orders are captured automatically.
-- **Payment status**: the UI polls PayPal and announces when it is paid.
-- **MCP server**: Claude Desktop, Claude Code or any MCP client can create invoices and payment links as tools (agentic commerce, human confirmation before every call).
-- **German and English**, number words (“fünfzig Euro”, “two thousand five hundred dollars”), decimals (“19,90 €”, “12 Euro 50”), quantities (“3 Stunden à 90 Euro”), due dates (“fällig in 2 Wochen”, “due in 30 days”), contacts with fuzzy name matching (“Jonh” → John).
-- **Zero dependencies**, Node.js only. 25 unit tests.
+Built for people with tremors, arthritis, RSI, paralysis or missing fingers, for blind and low-vision users, and for everyone whose hands are busy. It works with [Jabboo](https://jabboo.app) – a local, privacy-first dictation app for macOS (speech recognition runs offline with NVIDIA Parakeet) – and with any other dictation tool, screen reader or keyboard.
+
+> Sandbox build: Jabboo Pay only talks to the **PayPal Sandbox** and only **requests** money (invoices, payment links). It can never send money.
+
+## What you can do
+
+| Say | What happens | PayPal API |
+| --- | --- | --- |
+| “Schick Max eine Rechnung über 50 Euro für das Shopware-Plugin” | Spoken preview, then on “ja”: invoice created and issued, payer link on the clipboard | Invoicing v2 (create, send) |
+| “Send John an invoice for 3 hours at 80 dollars for consulting, due in 14 days” | 240 USD invoice with 3 × 80 hours, due date set | Invoicing v2 |
+| “Erstelle einen Zahlungslink über 19,90 Euro für das E-Book” | Pay-now link anyone can use; captured automatically when approved | Orders v2 (create, get, capture) |
+| “Hat Max bezahlt?” / “Has John paid?” | Fresh status from PayPal, answered aloud | Invoicing v2 / Orders v2 (get) |
+| “Was ist noch offen?” / “What’s still open?” | Every unpaid invoice and link, with the total, read aloud | Invoicing v2 / Orders v2 |
+| “ja” / “yes”, “abbrechen” / “cancel”, “wiederholen” / “repeat” | Confirm, cancel, hear the last message again | – |
+| 📷 Photo of a note, order or business card | Text recognised **on the Mac** (Apple Vision), then the same spoken preview and “yes” | Invoicing v2 / Orders v2 |
+| An AI agent (Claude Desktop, Claude Code) | MCP tools with human approval per call | all of the above |
+
+German and English, number words (“fünfzig Euro”, “two thousand five hundred dollars”), decimals and spoken cents (“19,90 €”, “12 Euro 50”), quantities, due dates, contacts with fuzzy name matching (“Jonh” → John).
+
+## Accessibility
+
+- **Eyes-free:** every message is spoken (Web Speech API in the browser, offline macOS voices via `say` in the terminal) *and* written to an ARIA live region for screen readers. “Repeat” repeats it. Voice can be slowed down or switched off.
+- **Hands-free:** one sentence and one “yes”. Focus stays in the command field, so dictation just continues; no clicking between steps. Jabboo’s send word presses Enter for you.
+- **Never by accident:** nothing is created without an explicit “yes” after the spoken preview. Esc or “cancel” always works. Missing information is said out loud (“I still need the amount”).
+- **Keyboard only:** skip link, logical tab order, visible 3 px focus ring, Enter / Shift+Enter / Esc.
+- **Low vision:** text contrast ≥ 4.5:1 in light and dark mode (borders ≥ 3:1), targets ≥ 44 px, A− / A+ text size up to 200 % plus browser zoom, `prefers-contrast` and Windows high-contrast (`forced-colors`) support, status as text (“✓ Paid” / “○ Open”), never colour alone.
+- **Screen readers:** labelled landmarks and controls, a real table for the history, links that announce where they go and that they open a new tab. Checked with the accessibility tree; designed for VoiceOver.
+
+Target: WCAG 2.2 level AA.
 
 ## How it works
 
 ```
- you speak ──► Jabboo (on-device ASR, Parakeet) ──► text ──► Jabboo Pay parser ──► preview + “confirm”
-                                                             (intent, amount,      │
-                                                              currency, contact,   ▼
-                                                              purpose, due date)  PayPal Sandbox REST
-                                                                                  Invoicing v2 / Orders v2
-                                                                                   │
-                                     clipboard + spoken reply ◄── payer link ◄─────┘
-                                     “Max just paid” ◄────────── status polling (auto-capture)
-
- Claude / any MCP client ──► jabboo-pay mcp (stdio) ──► same service ──► PayPal Sandbox
+ voice ─► Jabboo (on-device ASR) ─► text ─┐
+ photo ─► Apple Vision (on-device OCR) ───┼─► parser ─► spoken preview ─► "yes" ─► PayPal Sandbox REST
+ keyboard / screen reader ────────────────┘   (intent, amount,                   Invoicing v2 · Orders v2
+                                              contact, purpose)                          │
+ "Has Max paid?" ─► local ledger + fresh PayPal status ─► spoken answer ◄── link / status ┘
+ AI agent ─► MCP server (stdio) ─► same core
 ```
 
 | File | What it does |
 | --- | --- |
-| `src/parser.js` | Voice command → structured request. Pure function, whole-word matching, tested. |
-| `src/numbers.js` | Spoken number words → digits (DE/EN). |
-| `src/paypal.js` | Minimal PayPal REST client: OAuth2 client credentials, Invoicing v2, Orders v2, capture. Sandbox only. |
-| `src/service.js` | Shared glue for CLI, web UI and MCP. Logs PayPal ids only. |
-| `src/server.js` + `public/index.html` | Local web UI on `127.0.0.1:4242`. |
-| `src/mcp.js` | MCP server (JSON-RPC over stdio) with 5 tools. |
-| `bin/jabboo-pay.js` | CLI: `parse`, `create`, `status`, `serve`, `mcp`. |
+| `src/parser.js`, `src/numbers.js` | Voice command → structured request (DE/EN, number words). Pure, tested. |
+| `src/query.js` | Status questions, spoken answers, confirmation prompts. |
+| `src/document.js`, `native/ocr.swift` | Photo → text with Apple Vision on the Mac → request. Photo deleted right away. |
+| `src/paypal.js` | Minimal PayPal REST client: OAuth2, Invoicing v2, Orders v2, capture, retries with `PayPal-Request-Id`. Sandbox only. |
+| `src/service.js`, `src/ledger.js` | Shared core for UI, CLI and MCP; local list of what you created (`data/`, git-ignored). |
+| `src/server.js`, `public/index.html` | Accessible web UI on `127.0.0.1:4242`. |
+| `src/mcp.js` | MCP server with 6 tools. |
+| `src/speak.js`, `bin/jabboo-pay.js` | CLI incl. hands-free `voice` mode with spoken output. |
+
+Zero npm dependencies. 36 tests: `npm test`.
 
 ## Setup (5 minutes)
 
-Requirements: Node.js 20.12 or newer. No `npm install` needed – there are no dependencies.
+Requirements: macOS (for speech output and photo recognition; the rest runs anywhere), Node.js 20.12+. Photo recognition compiles a tiny Swift helper on first use (Xcode command line tools).
 
-1. **Get PayPal Sandbox credentials**
-   1. Log in at <https://developer.paypal.com/dashboard/> (any PayPal account works).
-   2. Open **Apps & Credentials**, make sure the toggle at the top says **Sandbox**.
-   3. Click **Create App**, name it `Jabboo Pay`, type **Merchant**, pick your default sandbox business account, **Create App**.
-   4. Open the app, scroll to **Features**, make sure **Invoicing** is ticked (needed for invoices; payment links work without it) and **Save**.
+1. **PayPal Sandbox credentials**
+   1. Log in at <https://developer.paypal.com/dashboard/>.
+   2. **Apps & Credentials**, toggle at the top on **Sandbox**.
+   3. **Create App** → name `Jabboo Pay`, type **Merchant** → **Create App**.
+   4. In the app under **Features**, tick **Invoicing** (needed for invoices; payment links work without it) → **Save**.
    5. Copy **Client ID** and **Secret**.
 2. **Configure**
    ```bash
@@ -56,53 +82,43 @@ Requirements: Node.js 20.12 or newer. No `npm install` needed – there are no d
    cp .env.example .env               # paste PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET
    cp contacts.example.json contacts.json
    ```
-   In `contacts.json`, map spoken names to payer e-mails. To pay your own test invoices, use the e-mail of your **sandbox personal account** (developer dashboard → **Testing Tools → Sandbox Accounts**).
+   `contacts.json` maps spoken names to payer e-mails. To pay your own test invoices, use your **sandbox personal account** (dashboard → **Testing Tools → Sandbox Accounts**).
 3. **Run**
    ```bash
-   npm test                           # 25 tests, no network
-   npm start                          # web UI on http://localhost:4242
+   npm test
+   npm start                          # http://localhost:4242
    ```
-4. **Talk to it**: click into the field and dictate (Jabboo, macOS Dictation via Fn Fn, or just type), press Enter. Check the preview, say or type **“confirm”** / **“bestätigen”** and Enter. The PayPal link is on your clipboard. Open it, log in with the sandbox personal account and pay – the UI says “Max just paid 50 euros”.
+4. **Talk to it:** dictate into the field (Jabboo, macOS Dictation, or type), Enter. Listen, say “yes”. Open the link, pay with the sandbox personal account – Jabboo Pay says “Max just paid”.
 
-### CLI
+### Hands-free terminal
 
 ```bash
-node bin/jabboo-pay.js parse  "Send John an invoice for 3 hours at 80 dollars for consulting, due in 14 days"
-node bin/jabboo-pay.js create "Schick Max eine Rechnung über 50 Euro für das Shopware-Plugin"
-node bin/jabboo-pay.js status invoice INV2-XXXX-XXXX-XXXX-XXXX
+node bin/jabboo-pay.js voice           # dictate a line, hear the answer, say "ja" / "yes"
+node bin/jabboo-pay.js ask "Was ist noch offen?"
+node bin/jabboo-pay.js create "Send John an invoice for 80 dollars for consulting"
 ```
 
 ### MCP (Claude Desktop / Claude Code)
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
 ```json
 {
   "mcpServers": {
-    "jabboo-pay": {
-      "command": "node",
-      "args": ["/absolute/path/to/jabboo-pay/bin/jabboo-pay.js", "mcp"]
-    }
+    "jabboo-pay": { "command": "node", "args": ["/absolute/path/to/jabboo-pay/bin/jabboo-pay.js", "mcp"] }
   }
 }
 ```
 
 or `claude mcp add jabboo-pay -- node /absolute/path/to/jabboo-pay/bin/jabboo-pay.js mcp`.
 
-Tools: `parse_payment_command`, `create_paypal_invoice`, `create_paypal_payment_link`, `get_payment_status`, `list_contacts`. Credentials come from the `.env` next to the script; they are never passed through the model.
+Tools: `parse_payment_command`, `create_paypal_invoice`, `create_paypal_payment_link`, `get_payment_status`, `ask_payment_question`, `list_contacts`. Credentials stay in `.env`; they never pass through the model.
 
 ## Privacy and safety
 
-- Speech never leaves the Mac: Jabboo transcribes on-device. Jabboo Pay only ever receives text.
-- Only the structured request (recipient name and e-mail, amount, currency, item, due date) is sent to PayPal – nothing else, no transcript.
-- Logs contain event names and PayPal ids only (enforced by a test). No names, amounts or e-mails.
-- The web UI binds to `127.0.0.1` and rejects cross-origin POSTs.
-- Every invoice or payment link needs an explicit confirmation (button, “confirm”, or the MCP client’s tool approval).
-- This build refuses to talk to anything but `api-m.sandbox.paypal.com`.
-
-## Why this exists
-
-Freelancers and small shops lose money between “I’ll send you the invoice” and actually sending it. With Jabboo you already talk to your computer all day; Jabboo Pay closes the loop: say it in the chat with your client, and the link is there before you finish the sentence.
+- Voice and photos are processed on the Mac. Jabboo Pay receives text; photos are deleted right after recognition.
+- Only the structured request (recipient name and e-mail, amount, currency, item, due date) goes to PayPal.
+- Logs contain event names and PayPal ids only – a unit test fails if a name, amount or e-mail shows up.
+- The web UI binds to `127.0.0.1`, rejects cross-origin requests and re-validates every request on the server.
+- Sandbox only, requests money only, explicit “yes” for every invoice or link.
 
 ## License
 
