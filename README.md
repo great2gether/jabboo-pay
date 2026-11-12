@@ -37,7 +37,7 @@ German and English, number words (“fünfzig Euro”, “two thousand five hund
 
 ## AG Grid, voice-controlled
 
-All PayPal invoices, payment links and transactions in one [AG Grid Community](https://www.ag-grid.com/) table (MIT, loaded from jsDelivr), plus a second grid for the audit log. A spoken search becomes a real AG Grid filter model (`setFilterModel`), the result is summarised aloud, and “next row” walks through it. Configured for screen readers: `ensureDomOrder`, no row/column virtualisation, no animation, text status, high-contrast Quartz theme, own `aria-live` region (AG Grid does not announce changes in the focused cell).
+All PayPal invoices, payment links and transactions in one [AG Grid Community](https://www.ag-grid.com/) table (MIT, loaded from jsDelivr), plus a second grid for the audit log. (PayPal notes that Transaction Search can take a while to list new Sandbox payments; invoices and links show up immediately.) A spoken search becomes a real AG Grid filter model (`setFilterModel`), the result is summarised aloud, and “next row” walks through it. Configured for screen readers: `ensureDomOrder`, no row/column virtualisation, no animation, text status, high-contrast Quartz theme, own `aria-live` region (AG Grid does not announce changes in the focused cell).
 
 ## Accountability: tamper-evident audit log
 
