@@ -12,7 +12,7 @@ Jabboo Pay is the payments companion of [Jabboo](https://jabboo.app), a local, p
 - **Payment status**: the UI polls PayPal and announces when it is paid.
 - **MCP server**: Claude Desktop, Claude Code or any MCP client can create invoices and payment links as tools (agentic commerce, human confirmation before every call).
 - **German and English**, number words (“fünfzig Euro”, “two thousand five hundred dollars”), decimals (“19,90 €”, “12 Euro 50”), quantities (“3 Stunden à 90 Euro”), due dates (“fällig in 2 Wochen”, “due in 30 days”), contacts with fuzzy name matching (“Jonh” → John).
-- **Zero dependencies**, Node.js only. 24 unit tests.
+- **Zero dependencies**, Node.js only. 25 unit tests.
 
 ## How it works
 
@@ -47,7 +47,8 @@ Requirements: Node.js 20.12 or newer. No `npm install` needed – there are no d
    1. Log in at <https://developer.paypal.com/dashboard/> (any PayPal account works).
    2. Open **Apps & Credentials**, make sure the toggle at the top says **Sandbox**.
    3. Click **Create App**, name it `Jabboo Pay`, type **Merchant**, pick your default sandbox business account, **Create App**.
-   4. Copy **Client ID** and **Secret**.
+   4. Open the app, scroll to **Features**, make sure **Invoicing** is ticked (needed for invoices; payment links work without it) and **Save**.
+   5. Copy **Client ID** and **Secret**.
 2. **Configure**
    ```bash
    git clone https://github.com/great2gether/jabboo-pay.git
@@ -58,7 +59,7 @@ Requirements: Node.js 20.12 or newer. No `npm install` needed – there are no d
    In `contacts.json`, map spoken names to payer e-mails. To pay your own test invoices, use the e-mail of your **sandbox personal account** (developer dashboard → **Testing Tools → Sandbox Accounts**).
 3. **Run**
    ```bash
-   npm test                           # 24 tests, no network
+   npm test                           # 25 tests, no network
    npm start                          # web UI on http://localhost:4242
    ```
 4. **Talk to it**: click into the field and dictate (Jabboo, macOS Dictation via Fn Fn, or just type), press Enter. Check the preview, say or type **“confirm”** / **“bestätigen”** and Enter. The PayPal link is on your clipboard. Open it, log in with the sandbox personal account and pay – the UI says “Max just paid 50 euros”.

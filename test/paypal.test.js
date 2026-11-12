@@ -127,3 +127,26 @@ test("MCP: initialize, tools/list, tools/call", async () => {
   const unknown = await handle({ jsonrpc: "2.0", id: 6, method: "nope" });
   assert.equal(unknown.error.code, -32601);
 });
+
+test("retries Sandbox 503s with one PayPal-Request-Id; explains missing invoicing permission", async () => {
+  let n = 0;
+  const ids = [];
+  const fetchImpl = async (url, init = {}) => {
+    const path = new URL(url).pathname;
+    const json = (status, obj) => ({ ok: status < 400, status, json: async () => obj, text: async () => JSON.stringify(obj) });
+    if (path === "/v1/oauth2/token") return json(200, { access_token: "tok", expires_in: 32400 });
+    if (path === "/v2/checkout/orders") {
+      ids.push(init.headers["PayPal-Request-Id"]);
+      if (++n < 3) return json(503, {});
+      return json(201, { id: "ORDER1", status: "PAYER_ACTION_REQUIRED", links: [{ rel: "payer-action", href: "https://www.sandbox.paypal.com/checkoutnow?token=ORDER1" }] });
+    }
+    if (path === "/v2/invoicing/invoices") return json(403, { name: "NOT_AUTHORIZED", debug_id: "d2" });
+    return json(404, {});
+  };
+  const client = createPayPalClient({ clientId: "id", clientSecret: "secret", fetchImpl, retryDelayMs: 1 });
+  const r = await client.createOrder(parseCommand("Erstelle einen Zahlungslink über 5 Euro für Test", contacts));
+  assert.equal(r.id, "ORDER1");
+  assert.equal(ids.length, 3);
+  assert.equal(new Set(ids).size, 1);
+  await assert.rejects(client.createInvoice(parseCommand("Schick Max eine Rechnung über 5 Euro für Test", contacts)), /Features.*Invoicing/);
+});

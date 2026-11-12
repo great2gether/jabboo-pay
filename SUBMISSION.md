@@ -50,7 +50,7 @@ Every request shows a preview first. Nothing is created until you say or click â
 - **PayPal**: a small REST client talks to the PayPal Sandbox â€“ OAuth2 client credentials, `POST /v2/invoicing/invoices` + `/send` (without PayPal e-mailing anyone, the link is shared where the conversation already happens), `GET /v2/invoicing/invoices/{id}` for status, `POST /v2/checkout/orders` with `payment_source.paypal.experience_context` for pay-now links, and automatic `capture` once an order is approved.
 - **Interfaces**: a local web UI (Node `http`, plain HTML, speech synthesis for spoken feedback), a CLI, and an MCP server (JSON-RPC 2.0 over stdio) for Claude Desktop and Claude Code.
 - **AI-assisted engineering**: the project was designed and built with Claude Code.
-- Zero runtime dependencies, 24 tests (`npm test`), MIT licensed.
+- Zero runtime dependencies, 25 tests (`npm test`), MIT licensed.
 
 ### Challenges we ran into
 

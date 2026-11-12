@@ -52,7 +52,7 @@ Say:
 
 **2:20–2:35 · Close** (screen: GitHub repo, MIT badge)
 
-> “Open source under MIT, zero dependencies, 24 tests. Jabboo Pay: say it, get paid. Thanks!”
+> “Open source under MIT, zero dependencies, 25 tests. Jabboo Pay: say it, get paid. Thanks!”
 
 ---
 

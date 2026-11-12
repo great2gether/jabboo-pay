@@ -1,6 +1,8 @@
 // Minimal PayPal REST client for the Sandbox: OAuth, Invoicing v2, Orders v2.
 // No SDK, no dependencies. Errors never contain credentials or request bodies.
 
+import { randomUUID } from "node:crypto";
+
 export const SANDBOX_API = "https://api-m.sandbox.paypal.com";
 
 export class PayPalError extends Error {
@@ -25,7 +27,7 @@ function splitName(full) {
   return { given_name: parts.slice(0, -1).join(" "), surname: parts[parts.length - 1] };
 }
 
-export function createPayPalClient({ clientId, clientSecret, fetchImpl = globalThis.fetch, baseUrl = SANDBOX_API, now = () => Date.now() } = {}) {
+export function createPayPalClient({ clientId, clientSecret, fetchImpl = globalThis.fetch, baseUrl = SANDBOX_API, now = () => Date.now(), retryDelayMs = 800 } = {}) {
   if (!clientId || !clientSecret) {
     throw new PayPalError("PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET are missing. Copy .env.example to .env and add your Sandbox app credentials.");
   }
@@ -57,18 +59,32 @@ export function createPayPalClient({ clientId, clientSecret, fetchImpl = globalT
     return token;
   }
 
+  // The Sandbox answers 503 now and then. POSTs carry a PayPal-Request-Id, so a
+  // retry can never create a second invoice or order.
   async function call(method, path, body, extraHeaders = {}) {
     const t = await getToken();
-    const res = await fetchImpl(`${baseUrl}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${t}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-        ...extraHeaders,
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    const requestId = method === "POST" ? randomUUID() : undefined;
+    let res;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        res = await fetchImpl(`${baseUrl}${path}`, {
+          method,
+          headers: {
+            Authorization: `Bearer ${t}`,
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+            ...(requestId ? { "PayPal-Request-Id": requestId } : {}),
+            ...extraHeaders,
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+      } catch (err) {
+        if (attempt === 2) throw new PayPalError(`PayPal is not reachable (${err.code || err.message}).`);
+        res = null;
+      }
+      if (res && res.status < 500) break;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, retryDelayMs * (attempt + 1)));
+    }
     const text = await res.text();
     let json = {};
     try {
@@ -77,6 +93,13 @@ export function createPayPalClient({ clientId, clientSecret, fetchImpl = globalT
       json = {};
     }
     if (!res.ok) {
+      if (res.status === 403 && path.startsWith("/v2/invoicing")) {
+        throw new PayPalError("This PayPal app may not create invoices yet: developer.paypal.com → Apps & Credentials → your app → Features → tick “Invoicing” → Save.", {
+          status: 403,
+          name: json.name,
+          debugId: json.debug_id,
+        });
+      }
       const issue = json.details?.[0]?.issue || json.details?.[0]?.description;
       throw new PayPalError(`PayPal ${method} ${path.split("/").slice(0, 4).join("/")} failed: ${json.name || res.status}${issue ? ` (${issue})` : ""}`, {
         status: res.status,
