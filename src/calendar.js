@@ -42,12 +42,13 @@ export function dueSpeech(rows, q, opts = {}) {
   for (const r of items) totals[r.currency] = (totals[r.currency] || 0) + Number(r.amount);
   const sum = Object.entries(totals).map(([c, v]) => spokenMoney(v.toFixed(2), c, lang)).join(lang === "de" ? " und " : " and ");
   const list = items
-    .slice(0, 6)
+    .slice(0, 3)
     .map((r) => `${r.recipient ? r.recipient.split(/\s+/)[0] : lang === "de" ? "Zahlungslink" : "payment link"} ${spokenMoney(Number(r.amount).toFixed(2), r.currency, lang)} ${lang === "de" ? "am" : "on"} ${when(r.due)}`)
     .join(", ");
   const n = items.length;
+  const more = n > 3 ? (lang === "de" ? ` und ${n - 3} weitere` : ` and ${n - 3} more`) : "";
   const head = lang === "de"
     ? `${q.overdue ? "Überfällig" : "Fällig"}: ${n === 1 ? "eine Zahlung" : `${n} Zahlungen`}`
     : `${q.overdue ? "Overdue" : "Due"}: ${n === 1 ? "one payment" : `${n} payments`}`;
-  return { items, speech: `${head}. ${list}${list.endsWith(".") ? "" : "."} ${lang === "de" ? "Zusammen" : "Total"} ${sum}.` };
+  return { items, speech: `${head}. ${list}${more}${(list + more).endsWith(".") ? "" : "."} ${lang === "de" ? "Zusammen" : "Total"} ${sum}.` };
 }
