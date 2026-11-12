@@ -65,6 +65,16 @@ export const TOOLS = [
     },
   },
   {
+    name: "ask_payment_question",
+    description:
+      "Answer a spoken question about payments created with Jabboo Pay, with fresh status from PayPal: 'Hat Max bezahlt?', 'What is still open?'. Returns a sentence ready to be read aloud.",
+    inputSchema: {
+      type: "object",
+      properties: { question: { type: "string" } },
+      required: ["question"],
+    },
+  },
+  {
     name: "list_contacts",
     description: "List the names Jabboo Pay can resolve to an e-mail address (from contacts.json).",
     inputSchema: { type: "object", properties: {} },
@@ -84,6 +94,10 @@ export function createMcpHandler(service) {
         return text(await service.create(commandFromFields({ ...args, kind: "payment_link" })));
       case "get_payment_status":
         return text(await service.status(args.kind, String(args.id || "")));
+      case "ask_payment_question": {
+        const r = await service.interpret(String(args.question || ""));
+        return text(r.type === "answer" ? r.speech : "Not a payment question. Try: 'Has Max paid?' or 'What is still open?'");
+      }
       case "list_contacts":
         return text(Object.entries(service.contacts).map(([key, c]) => ({ key, name: c.name, email: c.email })));
       default: {
