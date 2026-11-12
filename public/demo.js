@@ -16,7 +16,7 @@
   async function narrate(text) {
     cap.textContent = text;
     await quiet();
-    await new Promise((res) => { const u = new SpeechSynthesisUtterance(text); u.voice = voice(); u.lang = "en-US"; u.rate = 1; u.onend = res; u.onerror = res; speechSynthesis.speak(u); });
+    await new Promise((res) => { const u = new SpeechSynthesisUtterance(text); u.voice = voice(); u.lang = "en-US"; u.rate = 0.95; u.onend = res; u.onerror = res; speechSynthesis.speak(u); });
     await sleep(300);
   }
   async function type(text) {
@@ -36,20 +36,20 @@
     document.documentElement.style.setProperty("--scale", 1.1);
     await narrate("Sending an invoice means a dozen small fields and buttons. With a tremor, or without sight, that is a wall. This is PayPal for everyone who can't easily type or see.");
     await narrate("Speech is recognised offline on the Mac. For this recording, the commands are typed in. One sentence:");
-    await type("Schick Max eine PayPal-Rechnung über 50 Euro für das Shopware-Plugin");
+    await type("Send Max a PayPal invoice for 50 euros for the Shopware plugin");
     await narrate("It reads everything back and waits for my yes.");
-    await type("Ja");
+    await type("Yes");
     await narrate("A real invoice in the PayPal Sandbox, created with the Invoicing API. The payer link is on the clipboard.");
     await narrate("Now a voice search in an accessible AG Grid.");
-    await type("Zeig mir alle offenen Rechnungen über 100 Euro aus diesem Monat");
+    await type("Show me all open invoices over 100 euros from this month");
     show("grid-h");
     await sleep(800);
-    await type("Nächste Zeile");
+    await type("Next row");
     await narrate("The sentence became a real AG Grid filter over all PayPal invoices, links and transactions, and the result is read aloud.");
-    await type("Was wird diese Woche fällig?");
+    await type("What is due this week?");
     show("grid-h");
     await narrate("Due dates are read aloud, and shown in a Bryntum calendar.");
-    await type("Prüfe das Protokoll");
+    await type("Verify the audit log");
     show("grid-h");
     await narrate("Every step is notarised: what was heard, what was read back, how it was confirmed, and what PayPal answered. Each line is chained with SHA-256, so any change is detected.");
     await narrate("A photo of a note works too. Text recognition runs on the Mac.");
@@ -63,7 +63,7 @@
       window.__jabbooDemoPhoto?.(r);
       await sleep(900); await quiet();
       pic.remove();
-      await type("Abbrechen");
+      await type("Cancel");
     } catch {}
     await narrate("And AI agents use the same core through MCP.");
     term.style.display = "block"; term.textContent = "";
