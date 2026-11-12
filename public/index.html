@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jabboo Pay – PayPal by voice</title>
+<!-- AG Grid Community (MIT) -->
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
 <style>
   /* WCAG 2.2 AA: text contrast ≥ 4.5:1 (checked for both themes), visible 3px focus,
      targets ≥ 44px, no information by colour alone, text scalable to 200 %+. */
@@ -25,7 +27,7 @@
   .skip { position: absolute; left: -9999px; top: 0; background: var(--card); color: var(--ink); padding: .75rem 1rem; z-index: 10; }
   .skip:focus { left: 1rem; top: 1rem; }
   :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 6px var(--focus-ring); }
-  main, .top { max-width: 48rem; margin: 0 auto; padding: 0 1rem; }
+  main, .top { max-width: 60rem; margin: 0 auto; padding: 0 1rem; }
   .top { display: flex; align-items: center; gap: .75rem; padding-top: 2rem; flex-wrap: wrap; }
   .logo { width: 2.5rem; height: 2.5rem; border-radius: .75rem; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 800; font-size: 1.3rem; }
   h1 { font-size: 1.7rem; margin: 0; letter-spacing: -0.01em; }
@@ -66,7 +68,11 @@
   footer { color: var(--muted); font-size: .95rem; margin: 2rem auto 3rem; max-width: 48rem; padding: 0 1rem; }
   footer strong { color: var(--ink); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  [hidden] { display: none !important; }
+  [hidden] { display: none; }
+  #grid .ag-cell, #grid .ag-header-cell-text { font-size: 1rem; }
+  #grid .ag-cell a { color: var(--ink); font-weight: 700; text-decoration: underline; }
+  #grid .ag-row-selected::before { background: var(--open-bg); }
+  #grid .ag-row .ag-cell.ag-cell-focus, #grid .ag-header-row .ag-header-cell:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
   @media (forced-colors: active) { .badge, .card, button, textarea { border: 2px solid CanvasText; } }
 </style>
 </head>
@@ -132,12 +138,17 @@
     </div>
   </section>
 
-  <section class="card" id="historyCard" hidden>
-    <table>
-      <caption>Created with Jabboo Pay</caption>
-      <thead><tr><th scope="col">Status</th><th scope="col">What</th><th scope="col">Link</th></tr></thead>
-      <tbody id="history"></tbody>
-    </table>
+  <section class="card" aria-labelledby="grid-h">
+    <h2 id="grid-h">All PayPal payments <span class="hint" style="font-weight:400">(built with AG Grid)</span></h2>
+    <p class="hint" id="grid-help">Search by voice: “Zeig mir alle offenen Rechnungen über 100 Euro aus diesem Monat”, “Show paid invoices to Max”, “Zeig alles”. Move through results with “nächste Zeile” / “next row”, “vorherige Zeile”, “lies die Zeile vor”. With the keyboard: Tab into the table, arrow keys, Enter on a column header sorts.</p>
+    <p class="say" id="gridStatus" role="status" aria-live="polite" aria-atomic="true" style="font-size:1.05rem">Loading payments …</p>
+    <div class="row" style="margin:0 0 .75rem">
+      <button type="button" class="secondary" id="gridRefresh">Refresh from PayPal</button>
+      <button type="button" class="secondary" id="gridClear">Clear filters</button>
+      <button type="button" class="secondary" id="gridRead" aria-pressed="false">Read rows on focus</button>
+    </div>
+    <div id="grid" style="width:100%" aria-describedby="grid-help"></div>
+    <ul class="hint" id="gridNotes"></ul>
   </section>
 </main>
 
@@ -173,6 +184,7 @@ $("slow").onclick = () => { slow = !slow; store.set("slow", slow); applySettings
 // One function for every message: written into the live region and spoken.
 function say(text, lang = "en") {
   last = { text, lang };
+  lastLang = lang;
   const r = $("reply");
   r.lang = lang === "de" ? "de" : "en";
   r.textContent = text;
@@ -184,6 +196,11 @@ function say(text, lang = "en") {
     u.rate = slow ? 0.8 : 1;
     speechSynthesis.speak(u);
   } catch {}
+}
+
+function speakOnly(text, lang) {
+  if (!speechOn) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang === "de" ? "de-DE" : "en-US"; u.rate = slow ? 0.8 : 1; speechSynthesis.speak(u); } catch {}
 }
 
 function showError(msg, lang = "en") {
@@ -233,6 +250,8 @@ async function submit(textArg) {
       if (r.control === "confirm") return pending ? confirmPending() : say("There is nothing to confirm yet. Say a command first.");
     }
     if (r.type === "answer") { $("preview").hidden = true; return say(r.speech, r.query.language); }
+    if (r.type === "grid") return applyGridResult(r);
+    if (r.type === "grid_nav") return moveGrid(r.move);
     pending = r.command.ok ? r.command : null;
     renderPreview(r.command);
     say(r.speech, r.command.language);
@@ -285,20 +304,127 @@ function setBadge(el, paid) {
   el.textContent = paid ? "✓ Paid" : "○ Open";
 }
 
-function renderHistory() {
-  $("historyCard").hidden = items.length === 0;
-  $("history").replaceChildren(...items.map((it) => {
-    const tr = document.createElement("tr");
-    const s = document.createElement("td"); const b = document.createElement("span"); setBadge(b, it.paid); s.append(b);
-    const w = document.createElement("td"); w.textContent = it.summary;
-    const l = document.createElement("td"); const a = document.createElement("a");
-    a.href = it.link; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open";
-    const sr = document.createElement("span"); sr.className = "sr-only"; sr.textContent = ` ${it.summary} on PayPal (new tab)`;
-    a.append(sr); l.append(a);
-    tr.append(s, w, l);
-    return tr;
-  }));
+// ---------- AG Grid: all PayPal payments, searchable by voice ----------
+let grid = null;
+let gridCursor = -1;
+let readOnFocus = false;
+let lastLang = "en";
+const gridStatus = (t) => ($("gridStatus").textContent = t);
+
+function rowLabel(r) { return r.sentence?.[lastLang === "de" ? "de" : "en"] || r.id; }
+
+function initGrid() {
+  if (!window.agGrid) { gridStatus("The table could not be loaded (no internet for the AG Grid script). Voice answers still work."); return; }
+  if (agGrid.ModuleRegistry && agGrid.AllCommunityModule) agGrid.ModuleRegistry.registerModules([agGrid.AllCommunityModule]);
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const theme = agGrid.themeQuartz.withParams({
+    fontSize: 16, headerFontSize: 16, headerFontWeight: 700, rowHeight: 48, headerHeight: 48,
+    foregroundColor: dark ? "#f4f1fa" : "#17112a", backgroundColor: dark ? "#1b1528" : "#ffffff",
+    headerBackgroundColor: dark ? "#241c35" : "#efebf8", borderColor: dark ? "#7b7392" : "#8c84a3",
+    accentColor: "#5a2ee0", rowHoverColor: dark ? "#2b2240" : "#f3effc", selectedRowBackgroundColor: dark ? "#33240a" : "#fff0d6",
+  });
+  const money = (p) => {
+    if (p.value == null) return "";
+    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: p.data.currency }).format(p.value); } catch { return `${Number(p.value).toFixed(2)} ${p.data.currency}`; }
+  };
+  const dateCmp = (filterDate, cell) => {
+    if (!cell) return -1;
+    const c = new Date(cell.getFullYear(), cell.getMonth(), cell.getDate()).getTime();
+    return c < filterDate.getTime() ? -1 : c > filterDate.getTime() ? 1 : 0;
+  };
+  grid = agGrid.createGrid($("grid"), {
+    theme,
+    domLayout: "autoHeight",
+    ensureDomOrder: true,
+    suppressRowVirtualisation: true,
+    suppressColumnVirtualisation: true,
+    animateRows: false,
+    rowSelection: { mode: "singleRow", checkboxes: false, enableClickSelection: true },
+    getRowId: (p) => p.data.id,
+    overlayNoRowsTemplate: "<span>No payments yet. Create one by voice above.</span>",
+    defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: false, flex: 1, minWidth: 110 },
+    columnDefs: [
+      { field: "statusText", headerName: "Status", minWidth: 110, filter: "agTextColumnFilter",
+        cellRenderer: (p) => (p.value === "Paid" ? "✓ Paid" : p.value === "Open" ? "○ Open" : p.value) },
+      { field: "kindText", headerName: "Type", minWidth: 140, filter: "agTextColumnFilter" },
+      { field: "recipient", headerName: "Recipient", minWidth: 150, filter: "agTextColumnFilter", valueFormatter: (p) => p.value || "—" },
+      { field: "amount", headerName: "Amount", minWidth: 130, filter: "agNumberColumnFilter", type: "rightAligned", valueFormatter: money },
+      { field: "currency", headerName: "Currency", hide: true, filter: "agTextColumnFilter" },
+      { field: "description", headerName: "Purpose", minWidth: 160, filter: "agTextColumnFilter" },
+      { field: "date", headerName: "Date", minWidth: 120, filter: "agDateColumnFilter", sort: "desc",
+        valueGetter: (p) => (p.data.date ? new Date(p.data.date) : null),
+        valueFormatter: (p) => (p.value ? p.value.toLocaleDateString() : ""),
+        filterParams: { comparator: dateCmp, inRangeInclusive: true } },
+      { field: "link", headerName: "Link", sortable: false, filter: false, minWidth: 100,
+        cellRenderer: (p) => {
+          if (!p.value) return "";
+          const a = document.createElement("a");
+          a.href = p.value; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open";
+          a.setAttribute("aria-label", `Open on PayPal, new tab: ${rowLabel(p.data)}`);
+          return a;
+        } },
+    ],
+    onCellFocused: (e) => {
+      if (e.rowIndex == null || e.rowPinned) return;
+      const node = grid.getDisplayedRowAtIndex(e.rowIndex);
+      if (!node) return;
+      gridCursor = e.rowIndex;
+      gridStatus(`Row ${e.rowIndex + 1} of ${grid.getDisplayedRowCount()}: ${rowLabel(node.data)}`);
+      if (readOnFocus) speakOnly(rowLabel(node.data), lastLang);
+    },
+    onFilterChanged: () => { gridCursor = -1; },
+  });
+  loadGrid();
 }
+
+async function loadGrid() {
+  if (!grid) return [];
+  try {
+    const { rows, notes } = await api("/api/grid");
+    grid.setGridOption("rowData", rows);
+    $("gridNotes").replaceChildren(...notes.map((n) => { const li = document.createElement("li"); li.textContent = n; return li; }));
+    gridStatus(`${grid.getDisplayedRowCount()} of ${rows.length} payments shown.`);
+    return rows;
+  } catch (e) { gridStatus("Could not load payments: " + e.message); return []; }
+}
+
+async function applyGridResult(r) {
+  lastLang = r.query.language;
+  if (grid) {
+    grid.setGridOption("rowData", r.rows);
+    $("gridNotes").replaceChildren(...(r.notes || []).map((n) => { const li = document.createElement("li"); li.textContent = n; return li; }));
+    grid.setFilterModel(r.filterModel);
+    grid.onFilterChanged();
+    gridCursor = -1;
+    gridStatus(`${grid.getDisplayedRowCount()} shown. ${r.speech}`);
+  }
+  say(r.speech, r.query.language);
+  $("grid").scrollIntoView({ block: "nearest" });
+}
+
+function moveGrid(move) {
+  if (!grid) return;
+  const n = grid.getDisplayedRowCount();
+  const de = lastLang === "de";
+  if (n === 0) return say(de ? "Die Tabelle ist leer." : "The table is empty.", lastLang);
+  if (move === "next") gridCursor = Math.min(n - 1, gridCursor + 1);
+  if (move === "previous") gridCursor = Math.max(0, gridCursor - 1);
+  if (move === "first") gridCursor = 0;
+  if (move === "current" && gridCursor < 0) gridCursor = 0;
+  const node = grid.getDisplayedRowAtIndex(gridCursor);
+  node.setSelected(true, true);
+  grid.ensureIndexVisible(gridCursor);
+  const end = gridCursor === n - 1 && move === "next" ? (de ? " Das war die letzte Zeile." : " That was the last row.") : "";
+  const text = `${de ? "Zeile" : "Row"} ${gridCursor + 1} ${de ? "von" : "of"} ${n}: ${rowLabel(node.data)}${end}`;
+  gridStatus(text);
+  say(text, lastLang);
+  // Focus stays in the command field so dictation can go on.
+}
+
+$("gridRefresh").onclick = loadGrid;
+$("gridClear").onclick = () => { if (grid) { grid.setFilterModel(null); gridStatus(`Filters cleared. ${grid.getDisplayedRowCount()} payments shown.`); } };
+$("gridRead").onclick = () => { readOnFocus = !readOnFocus; $("gridRead").setAttribute("aria-pressed", String(readOnFocus)); };
+function renderHistory() { loadGrid(); }
 
 async function poll(item) {
   for (let i = 0; i < 400 && !item.paid; i++) {
@@ -312,6 +438,7 @@ async function poll(item) {
         const money = `${item.cmd.amount.replace(/\.00$/, "").replace(".", de ? "," : ".")} ${item.cmd.currency === "EUR" ? (de ? "Euro" : "euros") : item.cmd.currency}`;
         say(de ? `${who || "Jemand"} hat ${money} bezahlt.` : `${who || "Someone"} just paid ${money}.`, item.cmd.language);
         if ($("link").textContent === item.link) setBadge($("status"), true);
+        loadGrid();
         renderHistory();
       }
     } catch {}
@@ -348,6 +475,7 @@ document.querySelectorAll("[data-example]").forEach((b) => (b.onclick = () => su
 api("/api/health").then((h) => {
   if (!h.configured) $("health").textContent = " Warning: PayPal credentials missing – add them to .env and restart.";
 }).catch(() => {});
+initGrid();
 $("cmd").focus();
 </script>
 </body>

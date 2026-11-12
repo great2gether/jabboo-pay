@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { ROOT, createService, commandFromFields, log } from "./service.js";
 import { commandFromText, recognizeText } from "./document.js";
 import { confirmationPrompt } from "./query.js";
+import { rowSentence } from "./grid.js";
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
@@ -46,7 +47,13 @@ export function createApp(service, { port }) {
       // a reply ("ja", "cancel") or a question ("Hat Max bezahlt?").
       if (req.method === "POST" && (url.pathname === "/api/interpret" || url.pathname === "/api/parse")) {
         const { text } = await readJson(req);
-        return send(res, 200, await service.interpret(String(text || "").slice(0, 2000)));
+        const r = await service.interpret(String(text || "").slice(0, 2000));
+        if (r.type === "grid") r.rows = r.rows.map((x) => ({ ...x, sentence: { de: rowSentence(x, "de"), en: rowSentence(x, "en") } }));
+        return send(res, 200, r);
+      }
+      if (req.method === "GET" && url.pathname === "/api/grid") {
+        const { rows, notes } = await service.gridRows();
+        return send(res, 200, { rows: rows.map((r) => ({ ...r, sentence: { de: rowSentence(r, "de"), en: rowSentence(r, "en") } })), notes });
       }
       if (req.method === "GET" && url.pathname === "/api/ledger") {
         return send(res, 200, service.ledger.list().slice(0, 50).map(({ id, kind, status, paid, link, name, amount, currency, description, language }) => ({ id, kind, status, paid, link, name, amount, currency, description, language })));

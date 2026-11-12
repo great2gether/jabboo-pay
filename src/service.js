@@ -8,6 +8,7 @@ import { parseCommand, parseControl, describe, SUPPORTED_CURRENCIES } from "./pa
 import { createPayPalClient } from "./paypal.js";
 import { parseQuery, answerQuery, confirmationPrompt } from "./query.js";
 import { createLedger } from "./ledger.js";
+import { parseGridQuery, parseGridNav, toFilterModel, applyFilters, summarize } from "./grid.js";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -87,6 +88,7 @@ export function createService({ env = process.env, root = ROOT, client = null, c
     );
   }
 
+  let gridCache = null;
   const service = {
     contacts: book,
     ledger: store,
@@ -142,10 +144,63 @@ export function createService({ env = process.env, root = ROOT, client = null, c
       return { type: "answer", query, speech: answerQuery(query, all) };
     },
 
+    // All rows for the grid: our ledger (fresh status) + PayPal invoice list + Transaction Search.
+    // A source the Sandbox app is not allowed to read is skipped with a note.
+    async gridRows({ maxAgeMs = 0 } = {}) {
+      if (gridCache && Date.now() - gridCache.at < maxAgeMs) return gridCache.value;
+      const notes = [];
+      const api = getClient();
+      const ledgerRows = (await refresh(store.list().slice(0, 50))).map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        recipient: r.name,
+        email: null,
+        amount: Number(r.amount),
+        currency: r.currency,
+        description: r.description,
+        status: r.status,
+        statusText: r.paid ? "Paid" : ["CANCELLED", "VOIDED"].includes(r.status) ? "Cancelled" : "Open",
+        paid: !!r.paid,
+        date: r.createdAt,
+        link: r.link,
+      }));
+      const byId = new Map(ledgerRows.map((r) => [r.id, r]));
+      const sources = [
+        ["invoices", () => api.listInvoices(), "Invoicing"],
+        ["transactions", () => api.listTransactions(), "Transaction search"],
+      ];
+      for (const [name, load, feature] of sources) {
+        try {
+          for (const r of await load()) if (r.id && !byId.has(r.id)) byId.set(r.id, r);
+        } catch (err) {
+          notes.push(err.status === 403 || err.paypalName === "NOT_AUTHORIZED" || /NOT_AUTHORIZED|PERMISSION/.test(err.message)
+            ? `PayPal ${name} not available: enable “${feature}” in the Sandbox app’s features.`
+            : `PayPal ${name} could not be loaded right now.`);
+        }
+      }
+      const rows = [...byId.values()].map((r) => ({ ...r, kindText: { invoice: "Invoice", payment_link: "Payment link", transaction: "Transaction" }[r.kind] }));
+      rows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+      gridCache = { at: Date.now(), value: { rows, notes } };
+      return { rows, notes };
+    },
+
+    async gridSearch(query) {
+      const { rows, notes } = await service.gridRows({ maxAgeMs: 5000 });
+      const hits = query.reset ? rows : applyFilters(rows, query.filters);
+      const speech = query.reset
+        ? (query.language === "de" ? `Alle Filter aus. ${rows.length} Einträge.` : `All filters cleared. ${rows.length} entries.`)
+        : summarize(hits, query.filters, query.language);
+      return { type: "grid", query, filterModel: query.reset ? {} : toFilterModel(query.filters), count: hits.length, speech, notes, rows };
+    },
+
     // One entry point for whatever was said: a reply, a question or a new command.
     async interpret(text) {
       const control = parseControl(text || "");
       if (control) return { type: "control", control };
+      const nav = parseGridNav(text || "");
+      if (nav) return { type: "grid_nav", move: nav };
+      const gq = parseGridQuery(text || "", book);
+      if (gq) return service.gridSearch(gq);
       const query = parseQuery(text || "", book);
       if (query) return service.answer(query);
       const cmd = service.parse(String(text || ""));

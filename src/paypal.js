@@ -230,5 +230,59 @@ export function createPayPalClient({ clientId, clientSecret, fetchImpl = globalT
     };
   }
 
-  return { getToken, createInvoice, getInvoice, createOrder, getOrder };
+  // --- Lists for the grid -------------------------------------------------
+  const INVOICE_STATUS = { PAID: "Paid", MARKED_AS_PAID: "Paid", CANCELLED: "Cancelled", REFUNDED: "Cancelled", MARKED_AS_REFUNDED: "Cancelled" };
+  async function listInvoices() {
+    const r = await call("GET", "/v2/invoicing/invoices?page=1&page_size=100&total_required=false");
+    return (r.items || []).map((inv) => {
+      const b = inv.primary_recipients?.[0]?.billing_info || {};
+      const name = b.name?.full_name || [b.name?.given_name, b.name?.surname].filter(Boolean).join(" ") || null;
+      return {
+        id: inv.id,
+        kind: "invoice",
+        recipient: name || b.email_address || null,
+        email: b.email_address || null,
+        amount: Number(inv.amount?.value || 0),
+        currency: inv.amount?.currency_code || inv.detail?.currency_code,
+        description: inv.detail?.memo || inv.detail?.note || inv.detail?.invoice_number || "",
+        status: inv.status,
+        statusText: INVOICE_STATUS[inv.status] || (inv.status === "DRAFT" ? "Draft" : "Open"),
+        paid: inv.status === "PAID" || inv.status === "MARKED_AS_PAID",
+        date: inv.detail?.invoice_date ? `${inv.detail.invoice_date}T00:00:00Z` : inv.detail?.metadata?.create_time,
+        link: inv.detail?.metadata?.recipient_view_url || null,
+      };
+    });
+  }
+
+  // Transaction Search: what actually arrived (last 31 days, the API maximum per call).
+  async function listTransactions({ days = 31 } = {}) {
+    const end = new Date(now());
+    const start = new Date(end.getTime() - days * 86_400_000);
+    const iso = (d) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+    const r = await call(
+      "GET",
+      `/v1/reporting/transactions?start_date=${iso(start)}&end_date=${iso(end)}&fields=transaction_info,payer_info,cart_info&page_size=100`,
+    );
+    const STATUS = { S: "Paid", P: "Open", V: "Cancelled", D: "Cancelled" };
+    return (r.transaction_details || []).map((t) => {
+      const ti = t.transaction_info || {};
+      const p = t.payer_info || {};
+      return {
+        id: ti.transaction_id,
+        kind: "transaction",
+        recipient: p.payer_name?.alternate_full_name || [p.payer_name?.given_name, p.payer_name?.surname].filter(Boolean).join(" ") || p.email_address || null,
+        email: p.email_address || null,
+        amount: Math.abs(Number(ti.transaction_amount?.value || 0)),
+        currency: ti.transaction_amount?.currency_code,
+        description: t.cart_info?.item_details?.[0]?.item_name || ti.transaction_subject || ti.transaction_note || "",
+        status: ti.transaction_status,
+        statusText: STATUS[ti.transaction_status] || "Open",
+        paid: ti.transaction_status === "S",
+        date: ti.transaction_initiation_date,
+        link: null,
+      };
+    });
+  }
+
+  return { getToken, createInvoice, getInvoice, createOrder, getOrder, listInvoices, listTransactions };
 }
