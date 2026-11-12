@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "jabboo-pay": {
+      "command": "node",
+      "args": ["bin/jabboo-pay.js", "mcp"]
+    }
+  }
+}

@@ -20,7 +20,7 @@ const SYMBOLS = { "€": "EUR", "$": "USD", "£": "GBP" };
 export const SUPPORTED_CURRENCIES = ["EUR", "USD", "GBP", "CHF"];
 
 const WAKE = /^\s*(?:(?:hey|he|hej|hi|ok|okay|hallo)[\s,]+)?(?:jabboo|jabu|jabbu|jaboo|jimmy|jackson)\b[\s,.:!]*/i;
-const SEND_TAIL = /[\s,.;:!-]*\b(?:jabboo|jabu|jabbu|jaboo|absenden|abschicken|send it)\s*[.!]?\s*$/i;
+const SEND_TAIL = /[\s,.;:!-]*\b(?:jabboo|jabu|jabbu|jaboo|absenden|abschicken|send it)\s*[.!?]?\s*$/i;
 
 const INVOICE_WORDS = /\b(rechnung|rechnungen|invoice|invoices|bill|faktura|paypal-rechnung|paypal-invoice)\b/i;
 const LINK_WORDS = /\b(zahlungslink|bezahllink|paylink|payment link|payment-link|zahlungs-link|link|anfordern|fordere|request|zahlungsaufforderung)\b/i;
