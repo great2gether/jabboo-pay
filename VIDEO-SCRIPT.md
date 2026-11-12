@@ -29,7 +29,7 @@ Say: „Zeig mir alle offenen Zahlungslinks über 100 Euro aus diesem Monat, Jab
 Say: „Nächste Zeile, Jabboo.“ → row is read aloud. Say „Nächste Zeile“ once more.
 > “The sentence becomes a real AG Grid filter over all my PayPal invoices, links and transactions – and the result is read to me. AG Grid is configured for screen readers; I never have to look.”
 
-**1:25–1:50 · Ask**
+**1:25–1:45 · Ask**
 Say: „Hat Max bezahlt, Jabboo?“ / „Was ist noch offen, Jabboo?“
 > “Fresh status straight from PayPal, as an answer, not a dashboard.”
 
